@@ -6,7 +6,7 @@ import type { User } from "@supabase/supabase-js";
 interface MessageInputProps {
   user: User | null;
   onSend: (content: string) => void;
-  onSignIn: () => void;
+  onSignIn: (email: string) => Promise<{ error: unknown }>;
   sending: boolean;
   channelName: string;
 }
@@ -19,6 +19,9 @@ export function MessageInput({
   channelName,
 }: MessageInputProps) {
   const [text, setText] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginSent, setLoginSent] = useState(false);
+  const [loginSending, setLoginSending] = useState(false);
 
   const handleSubmit = useCallback(() => {
     if (!text.trim() || sending) return;
@@ -36,29 +39,60 @@ export function MessageInput({
     [handleSubmit]
   );
 
+  const handleLogin = useCallback(async () => {
+    if (!loginEmail.trim() || loginSending) return;
+    setLoginSending(true);
+    const { error } = await onSignIn(loginEmail.trim());
+    setLoginSending(false);
+    if (!error) setLoginSent(true);
+  }, [loginEmail, loginSending, onSignIn]);
+
   if (!user) {
+    if (loginSent) {
+      return (
+        <div className="px-4 pb-4 pt-2">
+          <div className="bg-[#383a40] rounded-lg p-4 flex items-center justify-center gap-2">
+            <svg viewBox="0 0 20 20" className="w-5 h-5 text-[#3ba55d]" fill="currentColor" aria-hidden="true">
+              <title>Check</title>
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            <span className="text-sm text-[#3ba55d]">
+              로그인 링크를 보냈어요! 이메일을 확인하세요.
+            </span>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="px-4 pb-4 pt-2">
-        <div className="bg-[#383a40] rounded-lg p-4 flex items-center justify-between">
-          <span className="text-sm text-[#949ba4]">
-            채팅에 참여하려면 로그인하세요
+        <div className="bg-[#383a40] rounded-lg p-4 flex flex-col sm:flex-row items-center gap-3">
+          <span className="text-sm text-[#949ba4] shrink-0">
+            채팅에 참여하려면
           </span>
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="flex items-center gap-2 px-4 py-2 rounded-md
-              bg-[#5865f2] hover:bg-[#4752c4] active:bg-[#3c45a5]
-              text-white text-sm font-medium transition-colors"
-          >
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" aria-hidden="true">
-              <title>Google</title>
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-            </svg>
-            Google로 로그인
-          </button>
+          <div className="flex items-center gap-2 flex-1 w-full sm:w-auto">
+            <input
+              type="email"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }}
+              placeholder="이메일을 입력하세요"
+              className="flex-1 bg-[#1e1f22] border border-[#3f4147] rounded-md px-3 py-2
+                text-sm text-[#dbdee1] placeholder-[#6d6f78] outline-none
+                focus:border-[#5865f2] transition-colors"
+            />
+            <button
+              type="button"
+              onClick={handleLogin}
+              disabled={!loginEmail.trim() || loginSending}
+              className="flex items-center gap-2 px-4 py-2 rounded-md shrink-0
+                bg-[#5865f2] hover:bg-[#4752c4] active:bg-[#3c45a5]
+                text-white text-sm font-medium transition-colors
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loginSending ? "전송 중..." : "로그인"}
+            </button>
+          </div>
         </div>
       </div>
     );

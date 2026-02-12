@@ -105,14 +105,18 @@ export function useLobby() {
     return () => subscription.unsubscribe();
   }, [supabase, fetchProfile]);
 
-  const signIn = useCallback(async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-      },
-    });
-  }, [supabase]);
+  const signIn = useCallback(
+    async (email: string) => {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin + "/lobby",
+        },
+      });
+      return { error };
+    },
+    [supabase]
+  );
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();

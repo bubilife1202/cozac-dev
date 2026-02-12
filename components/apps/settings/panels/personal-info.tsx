@@ -3,16 +3,16 @@
 interface Device {
   name: string;
   model: string;
-  type: "macbook" | "iphone" | "ipad" | "apple-tv";
+  type: "macbook" | "iphone" | "ipad" | "smart-tv";
 }
 
 const devices: Device[] = [
-  { name: "cozac's MacBook Air", model: "This MacBook Air", type: "macbook" },
-  { name: "cozac's iPhone 16 Pro", model: "iPhone 16 Pro", type: "iphone" },
-  { name: "cozac's iPad", model: "iPad Air", type: "ipad" },
-  { name: "Family Room", model: "Apple TV", type: "apple-tv" },
-  { name: "Entertainment Room", model: "Apple TV", type: "apple-tv" },
-  { name: "Bedroom", model: "Apple TV", type: "apple-tv" },
+  { name: "cozac's Laptop", model: "This Laptop", type: "macbook" },
+  { name: "cozac's Phone", model: "Phone", type: "iphone" },
+  { name: "cozac's Tablet", model: "Tablet", type: "ipad" },
+  { name: "Family Room", model: "Smart TV", type: "smart-tv" },
+  { name: "Entertainment Room", model: "Smart TV", type: "smart-tv" },
+  { name: "Bedroom", model: "Smart TV", type: "smart-tv" },
 ];
 
 function DeviceIcon({ type }: { type: Device["type"] }) {
@@ -65,7 +65,7 @@ function DeviceIcon({ type }: { type: Device["type"] }) {
           <rect x="14" y="7" width="20" height="34" rx="1.5" fill="url(#ipad-screen)" />
         </svg>
       );
-    case "apple-tv":
+    case "smart-tv":
       return (
         <svg className="w-12 h-12" viewBox="0 0 48 48" fill="none">
           <rect x="8" y="8" width="32" height="32" rx="7" fill="#000000" />

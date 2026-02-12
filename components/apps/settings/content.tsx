@@ -29,7 +29,7 @@ const categoryInfo: Record<
   general: {
     icon: <Settings className="w-8 h-8" />,
     title: "General",
-    description: "Manage your overall setup and preferences for iPhone, such as software updates, device language, CarPlay, AirDrop, and more.",
+    description: "Manage your overall setup and preferences, such as software updates, device language, and more.",
     iconBg: "bg-gray-500",
   },
   appearance: {

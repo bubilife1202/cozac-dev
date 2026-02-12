@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faApple } from "@fortawesome/free-brands-svg-icons";
+import { faDesktop } from "@fortawesome/free-solid-svg-icons";
 import type { IconProp } from "@fortawesome/fontawesome-svg-core";
 
 interface BootSequenceProps {
@@ -40,7 +40,7 @@ export function BootSequence({ onComplete, autoStart = true }: BootSequenceProps
   return (
     <div className="flex flex-col items-center gap-8">
       <FontAwesomeIcon
-        icon={faApple as IconProp}
+        icon={faDesktop as IconProp}
         className="w-20 h-20 text-white/80"
       />
       <div className="w-48 h-1.5 bg-white/20 rounded-full overflow-hidden">

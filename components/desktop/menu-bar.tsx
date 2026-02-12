@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useWindowManager } from "@/lib/window-context";
 import { getAppById } from "@/lib/app-config";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faApple } from "@fortawesome/free-brands-svg-icons";
+import { faDesktop } from "@fortawesome/free-solid-svg-icons";
 import { faWifi, faBatteryFull, faSliders } from "@fortawesome/free-solid-svg-icons";
 import type { IconProp } from "@fortawesome/fontawesome-svg-core";
 import { cn } from "@/lib/utils";
@@ -115,7 +115,7 @@ export function MenuBar({
           )}
         >
           <FontAwesomeIcon
-            icon={faApple as IconProp}
+            icon={faDesktop as IconProp}
             className={cn(
               "w-4 h-4",
               openMenu === "apple" ? "text-white" : "text-black dark:text-white"

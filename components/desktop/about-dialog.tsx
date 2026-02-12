@@ -173,7 +173,7 @@ export function AboutDialog({
           </div>
 
           <p className="text-xs text-zinc-400 dark:text-white/50">
-            Copyright © 2011–2025 Apple Inc.
+            Copyright © 2025 cozac.dev
             <br />
             All rights reserved.
           </p>

@@ -10,7 +10,7 @@ interface AboutPanelProps {
   onCategorySelect?: (category: SettingsCategory, options?: { scrollToOSVersion?: boolean }) => void;
 }
 
-// Calculate days until AppleCare+ expiration (January 4, 2027)
+// Calculate days until warranty expiration (January 4, 2027)
 function getDaysUntilExpiration(): number {
   const expirationDate = new Date(2027, 0, 4); // January 4, 2027
   const today = new Date();
@@ -32,7 +32,7 @@ export function AboutPanel({ isMobile = false, onCategorySelect }: AboutPanelPro
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
             <span className="text-base">Name</span>
             <div className="flex items-center gap-1">
-                <span className="text-base text-muted-foreground">cozac&apos;s iphone</span>
+                <span className="text-base text-muted-foreground">cozac&apos;s phone</span>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </div>
           </div>
@@ -45,7 +45,7 @@ export function AboutPanel({ isMobile = false, onCategorySelect }: AboutPanelPro
           </div>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
             <span className="text-base">Model Name</span>
-            <span className="text-base text-muted-foreground">iPhone 16 Pro</span>
+            <span className="text-base text-muted-foreground">Phone</span>
           </div>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
             <span className="text-base">Model Number</span>
@@ -57,11 +57,11 @@ export function AboutPanel({ isMobile = false, onCategorySelect }: AboutPanelPro
           </div>
         </div>
 
-        {/* AppleCare+ */}
-        <div>
-          <div className="rounded-xl bg-background overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-              <span className="text-base">AppleCare+</span>
+         {/* Warranty */}
+         <div>
+           <div className="rounded-xl bg-background overflow-hidden">
+             <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+               <span className="text-base">Warranty</span>
               <div className="flex items-center gap-1">
                 <span className="text-base text-muted-foreground">Expires 1/4/27</span>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -158,7 +158,7 @@ export function AboutPanel({ isMobile = false, onCategorySelect }: AboutPanelPro
             />
           </svg>
         </div>
-        <h2 className="text-xl font-semibold">MacBook Air</h2>
+        <h2 className="text-xl font-semibold">Laptop</h2>
         <p className="text-xs text-muted-foreground">M2, 2022</p>
       </div>
 
@@ -167,11 +167,11 @@ export function AboutPanel({ isMobile = false, onCategorySelect }: AboutPanelPro
         <div className="divide-y divide-border/50">
           <div className="flex justify-between px-4 py-3">
             <span className="text-xs text-muted-foreground">Name</span>
-            <span className="text-xs">cozac&apos;s MacBook Air</span>
+            <span className="text-xs">cozac&apos;s Laptop</span>
           </div>
           <div className="flex justify-between px-4 py-3">
             <span className="text-xs text-muted-foreground">Chip</span>
-            <span className="text-xs">Apple M2</span>
+            <span className="text-xs">M2</span>
           </div>
           <div className="flex justify-between px-4 py-3">
             <span className="text-xs text-muted-foreground">Memory</span>

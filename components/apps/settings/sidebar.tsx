@@ -59,7 +59,7 @@ const connectivityItems = [
   { id: "battery", name: "Battery", icon: <Battery className="w-5 h-5 text-white" />, iconBg: "bg-green-500", type: "static" as const },
 ];
 
-const appleAccountKeywords = ["cozac", "apple", "account", "personal", "information", "name", "birthday"];
+const appleAccountKeywords = ["cozac", "account", "personal", "information", "name", "birthday"];
 
 export function Sidebar({
   selectedCategory,
@@ -152,7 +152,7 @@ export function Sidebar({
                     <div className="text-left flex-1">
                       <div className="font-semibold text-lg">cozac</div>
                       <div className="text-sm text-muted-foreground">
-                        Apple Account, iCloud+, and more
+                        Account, Cloud, and more
                       </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -310,7 +310,7 @@ export function Sidebar({
                     />
                     <div className="text-left">
                       <div className="font-medium text-xs">cozac</div>
-                      <div className="text-[10px] text-muted-foreground">Apple Account</div>
+                      <div className="text-[10px] text-muted-foreground">Account</div>
                     </div>
                   </button>
                 </div>

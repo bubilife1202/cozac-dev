@@ -89,7 +89,7 @@ const BASE_FILE_SYSTEM: Record<string, FileNode> = {
   "/Users/cozac/Documents": { type: "dir", contents: [] },
   "/Users/cozac/Downloads": { type: "dir", contents: [] },
   "/Users/cozac/Projects": { type: "dir", contents: [] }, // Dynamic from GitHub
-  "/Applications": { type: "dir", contents: ["iTerm.app", "Safari.app", "Notes.app", "Messages.app"] },
+  "/Applications": { type: "dir", contents: ["iTerm.app", "Browser.app", "Notes.app", "Messages.app"] },
   "/System": { type: "dir", contents: ["Library"] },
   "/Library": { type: "dir", contents: ["Fonts", "Preferences"] },
 };
@@ -491,13 +491,13 @@ Note: Projects folder contains my real GitHub repositories!`;
         output = `
                     'c.          ${USERNAME}@${HOSTNAME}
                  ,xNMM.          -----------------------
-               .OMMMMo           OS: macOS ${currentOS.name} ${currentOS.version}
-               OMMM0,            Host: MacBook Air (M2, 2022)
+               .OMMMMo           OS: ${currentOS.name} ${currentOS.version}
+               OMMM0,            Host: Laptop (M2, 2022)
      .;loddo:' loolloddol;.      Kernel: Darwin ${currentOS.darwinVersion}
    cKMMMMMMMMMMNWMMMMMMMMMM0:    Uptime: ${Math.floor(Math.random() * 100) + 1} days
  .KMMMMMMMMMMMMMMMMMMMMMMMWd.    Shell: zsh 5.9
  XMMMMMMMMMMMMMMMMMMMMMMMX.      Terminal: iTerm2
-;MMMMMMMMMMMMMMMMMMMMMMMM:       CPU: Apple M2
+;MMMMMMMMMMMMMMMMMMMMMMMM:       CPU: M2
 :MMMMMMMMMMMMMMMMMMMMMMMM:       Memory: 8GB
 .MMMMMMMMMMMMMMMMMMMMMMMMX.
  kMMMMMMMMMMMMMMMMMMMMMMMMWd.

@@ -29,9 +29,12 @@ export function IOSHomeIndicator({ variant, onGoHome }: IOSHomeIndicatorProps) {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-[100] flex items-end justify-center pb-2 h-[120px]"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      className={cn(
+        "fixed bottom-0 left-0 right-0 z-[100] flex items-end justify-center pb-2",
+        onGoHome ? "h-[120px]" : "h-[34px] pointer-events-none"
+      )}
+      onTouchStart={onGoHome ? handleTouchStart : undefined}
+      onTouchEnd={onGoHome ? handleTouchEnd : undefined}
     >
       <div
         className={cn(

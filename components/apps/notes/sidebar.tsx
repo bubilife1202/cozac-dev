@@ -265,9 +265,7 @@ export default function Sidebar({
 
   const handleNoteDelete = useCallback(
     async (noteToDelete: Note) => {
-      if (noteToDelete.public) {
-        return;
-      }
+      
 
       try {
         if (noteToDelete.id && sessionId) {

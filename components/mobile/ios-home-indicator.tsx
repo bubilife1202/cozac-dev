@@ -20,7 +20,7 @@ export function IOSHomeIndicator({ variant, onGoHome }: IOSHomeIndicatorProps) {
       if (touchStartY.current === null) return;
       const deltaY = touchStartY.current - e.changedTouches[0].clientY;
       touchStartY.current = null;
-      if (deltaY > 50 && onGoHome) {
+      if (deltaY > 30 && onGoHome) {
         onGoHome();
       }
     },
@@ -29,7 +29,7 @@ export function IOSHomeIndicator({ variant, onGoHome }: IOSHomeIndicatorProps) {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-[100] flex items-end justify-center pb-2 h-[34px]"
+      className="fixed bottom-0 left-0 right-0 z-[100] flex items-end justify-center pb-2 h-[120px]"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >

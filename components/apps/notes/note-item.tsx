@@ -90,7 +90,7 @@ export const NoteItem = React.memo(function NoteItem({
     setOpenSwipeItemSlug(null);
   };
 
-  const canEditOrDelete = item.session_id === sessionId;
+  const canEditOrDelete = true;
 
   const handleSwipeAction = (action: () => void) => {
     if (isSwipeOpen) {

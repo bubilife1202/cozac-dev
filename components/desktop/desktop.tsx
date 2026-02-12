@@ -39,7 +39,7 @@ interface DesktopProps {
 }
 
 // Constants for file paths
-const HOME_DIR = "/Users/alanagoyal";
+const HOME_DIR = "/Users/cozac";
 const PROJECTS_DIR = `${HOME_DIR}/Projects`;
 
 // Fetch file content from GitHub API
@@ -267,7 +267,7 @@ function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFi
       const parts = relativePath.split("/");
       const repo = parts[0];
       const repoPath = parts.slice(1).join("/");
-      const fileUrl = `https://raw.githubusercontent.com/alanagoyal/${repo}/main/${repoPath}`;
+      const fileUrl = `https://raw.githubusercontent.com/bubilife1202/${repo}/main/${repoPath}`;
       const ext = initialPreviewFile.split(".").pop()?.toLowerCase() || "";
       const fileType: PreviewFileType = ext === "pdf" ? "pdf" : "image";
 

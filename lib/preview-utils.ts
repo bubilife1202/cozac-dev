@@ -5,7 +5,7 @@ export function getPdfProxyUrl(fileUrl: string): string {
   return `/api/preview/pdf?url=${encodeURIComponent(fileUrl)}`;
 }
 
-const HOME_DIR = "/Users/alanagoyal";
+const HOME_DIR = "/Users/cozac";
 const PROJECTS_DIR = `${HOME_DIR}/Projects`;
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"];
 
@@ -21,7 +21,7 @@ export function getPreviewMetadataFromPath(
     const parts = relativePath.split("/");
     const repo = parts[0];
     const repoPath = parts.slice(1).join("/");
-    const fileUrl = `https://raw.githubusercontent.com/alanagoyal/${repo}/main/${repoPath}`;
+    const fileUrl = `https://raw.githubusercontent.com/bubilife1202/${repo}/main/${repoPath}`;
     return { fileUrl, fileType };
   }
 

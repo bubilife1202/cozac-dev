@@ -108,7 +108,7 @@ export function AppleMenu({
 
       <MenuItem
         icon={<LogOut className="w-4 h-4" />}
-        label="Log Out Alana Goyal..."
+        label="Log Out cozac..."
         onClick={() => {
           onLogout();
           onClose();

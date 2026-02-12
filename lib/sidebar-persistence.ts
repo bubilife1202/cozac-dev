@@ -125,7 +125,7 @@ export const finderSidebarPersistence = createSidebarPersistence<FinderSidebarIt
   FINDER_SIDEBAR_ITEMS
 );
 
-// Path persistence for full navigation path (e.g., /Users/alanagoyal/Projects/repo/folder)
+// Path persistence for full navigation path (e.g., /Users/cozac/Projects/repo/folder)
 export function loadFinderPath(): string | null {
   if (typeof window === "undefined") return null;
   try {

@@ -1,7 +1,5 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
-
 interface Device {
   name: string;
   model: string;
@@ -9,9 +7,9 @@ interface Device {
 }
 
 const devices: Device[] = [
-  { name: "Alana's MacBook Air", model: "This MacBook Air", type: "macbook" },
-  { name: "Alana's iPhone 16 Pro", model: "iPhone 16 Pro", type: "iphone" },
-  { name: "Alana's iPad", model: "iPad Air", type: "ipad" },
+  { name: "cozac's MacBook Air", model: "This MacBook Air", type: "macbook" },
+  { name: "cozac's iPhone 16 Pro", model: "iPhone 16 Pro", type: "iphone" },
+  { name: "cozac's iPad", model: "iPad Air", type: "ipad" },
   { name: "Family Room", model: "Apple TV", type: "apple-tv" },
   { name: "Entertainment Room", model: "Apple TV", type: "apple-tv" },
   { name: "Bedroom", model: "Apple TV", type: "apple-tv" },
@@ -83,21 +81,13 @@ export function PersonalInfoPanel() {
       {/* Personal Information Card */}
       <div className="rounded-xl bg-muted/50 overflow-hidden">
         <div className="divide-y divide-border/50">
-          <a
-            href="https://x.com/alanaagoyal"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer"
-          >
+          <div className="flex items-center justify-between px-4 py-3">
             <span className="text-xs">Name</span>
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <span className="text-xs">Alana Goyal</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
-          </a>
+            <span className="text-xs text-muted-foreground">cozac</span>
+          </div>
           <div className="flex items-center justify-between px-4 py-3">
             <span className="text-xs">Birthday</span>
-            <span className="text-xs text-muted-foreground">1/12/1996</span>
+            <span className="text-xs text-muted-foreground">1/2/1990</span>
           </div>
         </div>
       </div>

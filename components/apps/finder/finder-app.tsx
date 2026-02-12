@@ -10,7 +10,7 @@ import { APPS } from "@/lib/app-config";
 import { getFileModifiedDate } from "@/lib/file-storage";
 import { loadFinderPath, saveFinderPath } from "@/lib/sidebar-persistence";
 
-const USERNAME = "alanagoyal";
+const USERNAME = "cozac";
 const HOME_DIR = `/Users/${USERNAME}`;
 const PROJECTS_DIR = `${HOME_DIR}/Projects`;
 

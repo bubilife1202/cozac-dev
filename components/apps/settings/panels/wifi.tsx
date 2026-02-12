@@ -12,11 +12,11 @@ function WifiSignal({ strength = 3, className }: { strength?: 1 | 2 | 3; classNa
 }
 
 const knownNetworks = [
-  { name: "basecase", connected: true },
+  { name: "cozac-wifi", connected: true },
 ];
 
 const personalHotspots = [
-  { name: "alana's iphone" },
+  { name: "cozac's iphone" },
 ];
 
 const otherNetworks = [
@@ -71,7 +71,7 @@ export function WifiPanel({ isMobile = false }: WifiPanelProps) {
           <div className="py-4 border-b border-border/50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium">basecase</span>
+                <span className="text-xs font-medium">cozac-wifi</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="flex items-center gap-1 text-xs text-green-600">

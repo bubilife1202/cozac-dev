@@ -4,6 +4,10 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/utils/supabase/client";
 import type { User, RealtimeChannel } from "@supabase/supabase-js";
 
+interface LobbyActionResult {
+  error: string | null;
+}
+
 export interface Profile {
   id: string;
   email: string;
@@ -67,55 +71,125 @@ export function useLobby() {
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
-  const fetchProfile = useCallback(
-    async (userId: string) => {
-      const { data } = await supabase
+  const mapAuthErrorMessage = useCallback((message: string): string => {
+    if (message.includes("email_address_invalid")) {
+      return "이메일 형식을 다시 확인해 주세요.";
+    }
+    if (message.includes("over_email_send_rate_limit")) {
+      return "로그인 메일 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.";
+    }
+    if (message.includes("Email link is invalid")) {
+      return "로그인 링크가 만료되었어요. 다시 요청해 주세요.";
+    }
+    return "로그인 링크 발송에 실패했어요. 잠시 후 다시 시도해 주세요.";
+  }, []);
+
+  const ensureProfile = useCallback(
+    async (currentUser: User): Promise<Profile | null> => {
+      const { data: existingProfile, error: existingError } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", userId)
-        .single();
-      if (data) {
-        setProfile(data as Profile);
+        .eq("id", currentUser.id)
+        .maybeSingle();
+
+      if (existingError) {
+        setAuthError("프로필 정보를 불러오지 못했어요.");
+        return null;
       }
+
+      if (existingProfile) {
+        setProfile(existingProfile as Profile);
+        return existingProfile as Profile;
+      }
+
+      const displayName =
+        (currentUser.user_metadata?.full_name as string | undefined) ||
+        (currentUser.user_metadata?.name as string | undefined) ||
+        currentUser.email?.split("@")[0] ||
+        "guest";
+
+      const avatarUrl =
+        (currentUser.user_metadata?.avatar_url as string | undefined) ||
+        (currentUser.user_metadata?.picture as string | undefined) ||
+        null;
+
+      const { data: insertedProfile, error: insertError } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: currentUser.id,
+            email: currentUser.email,
+            display_name: displayName,
+            avatar_url: avatarUrl,
+          },
+          { onConflict: "id" }
+        )
+        .select("*")
+        .single();
+
+      if (insertError) {
+        setAuthError("로그인은 되었지만 프로필 생성에 실패했어요.");
+        return null;
+      }
+
+      setProfile(insertedProfile as Profile);
+      return insertedProfile as Profile;
     },
     [supabase]
   );
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null);
+      setAuthError(null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        await ensureProfile(session.user);
       }
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
+      setAuthError(null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        await ensureProfile(session.user);
       } else {
         setProfile(null);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase, fetchProfile]);
+  }, [supabase, ensureProfile]);
 
   const signIn = useCallback(
-    async (email: string) => {
+    async (email: string): Promise<LobbyActionResult> => {
+      const normalizedEmail = email.trim().toLowerCase();
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (!emailPattern.test(normalizedEmail)) {
+        return { error: "이메일 형식이 올바르지 않아요." };
+      }
+
       const { error } = await supabase.auth.signInWithOtp({
-        email,
+        email: normalizedEmail,
         options: {
+          shouldCreateUser: true,
           emailRedirectTo: window.location.origin + "/lobby",
         },
       });
-      return { error };
+
+      if (error) {
+        return { error: mapAuthErrorMessage(error.message) };
+      }
+
+      return { error: null };
     },
-    [supabase]
+    [supabase, mapAuthErrorMessage]
   );
 
   const signOut = useCallback(async () => {
@@ -133,14 +207,12 @@ export function useLobby() {
 
       if (!error && data) {
         setChannels(data as Channel[]);
-        if (data.length > 0 && !activeChannelId) {
-          setActiveChannelId(data[0].id);
-        }
+        setActiveChannelId((prev) => prev ?? data[0]?.id ?? null);
       }
     };
 
     fetchChannels();
-  }, [supabase, activeChannelId]);
+  }, [supabase]);
 
   useEffect(() => {
     if (!activeChannelId) return;
@@ -157,6 +229,8 @@ export function useLobby() {
 
       if (!error && data && !cancelled) {
         setMessages((data as MessageRow[]).map(mapMessage));
+      } else if (!cancelled) {
+        setMessages([]);
       }
       if (!cancelled) {
         setMessagesLoading(false);
@@ -171,66 +245,92 @@ export function useLobby() {
   }, [activeChannelId, supabase]);
 
   useEffect(() => {
+    if (!user) return;
+
     if (realtimeChannelRef.current) {
       supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
     }
 
-    const channel = supabase
-      .channel("lobby-messages")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-        },
-        async (payload) => {
-          const newRow = payload.new as {
-            id: string;
-            channel_id: string;
-            user_id: string;
-            content: string;
-            created_at: string;
-          };
+    let mounted = true;
 
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("display_name, avatar_url")
-            .eq("id", newRow.user_id)
-            .single();
+    const initRealtime = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-          const newMessage: LobbyMessage = {
-            id: newRow.id,
-            channelId: newRow.channel_id,
-            userId: newRow.user_id,
-            content: newRow.content,
-            createdAt: newRow.created_at,
-            profile: {
-              displayName: profileData?.display_name ?? "Anonymous",
-              avatarUrl: profileData?.avatar_url ?? null,
-            },
-          };
+      if (session?.access_token) {
+        await supabase.realtime.setAuth(session.access_token);
+      }
 
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMessage.id)) return prev;
-            return [...prev, newMessage];
-          });
-        }
-      )
-      .subscribe();
+      const channel = supabase
+        .channel(`lobby-messages-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+          },
+          async (payload) => {
+            const newRow = payload.new as {
+              id: string;
+              channel_id: string;
+              user_id: string;
+              content: string;
+              created_at: string;
+            };
 
-    realtimeChannelRef.current = channel;
+            const { data: profileData } = await supabase
+              .from("profiles")
+              .select("display_name, avatar_url")
+              .eq("id", newRow.user_id)
+              .maybeSingle();
+
+            const newMessage: LobbyMessage = {
+              id: newRow.id,
+              channelId: newRow.channel_id,
+              userId: newRow.user_id,
+              content: newRow.content,
+              createdAt: newRow.created_at,
+              profile: {
+                displayName: profileData?.display_name ?? "Anonymous",
+                avatarUrl: profileData?.avatar_url ?? null,
+              },
+            };
+
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMessage.id)) return prev;
+              return [...prev, newMessage];
+            });
+          }
+        )
+        .subscribe();
+
+      if (mounted) {
+        realtimeChannelRef.current = channel;
+      } else {
+        supabase.removeChannel(channel);
+      }
+    };
+
+    initRealtime();
 
     return () => {
-      supabase.removeChannel(channel);
+      mounted = false;
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
     };
-  }, [supabase]);
+  }, [supabase, user]);
 
   const sendMessage = useCallback(
     async (content: string) => {
-      if (!user || !activeChannelId || !content.trim() || sendingMessage) return;
+      if (!user || !profile || !activeChannelId || !content.trim() || sendingMessage) return;
 
       setSendingMessage(true);
+      setSendError(null);
 
       const { error } = await supabase.from("messages").insert({
         channel_id: activeChannelId,
@@ -239,12 +339,12 @@ export function useLobby() {
       });
 
       if (error) {
-        console.error("Failed to send message:", error);
+        setSendError("메시지 전송에 실패했어요. 다시 시도해 주세요.");
       }
 
       setSendingMessage(false);
     },
-    [user, activeChannelId, sendingMessage, supabase]
+    [user, profile, activeChannelId, sendingMessage, supabase]
   );
 
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null;
@@ -267,5 +367,7 @@ export function useLobby() {
     messagesLoading,
     sendMessage,
     sendingMessage,
+    authError,
+    sendError,
   };
 }

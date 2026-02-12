@@ -7,7 +7,7 @@ import type { Profile } from "./use-lobby";
 interface AuthButtonProps {
   user: User | null;
   profile: Profile | null;
-  onSignIn: (email: string) => Promise<{ error: unknown }>;
+  onSignIn: (email: string) => Promise<{ error: string | null }>;
   onSignOut: () => void;
 }
 
@@ -16,14 +16,19 @@ export function AuthButton({ user, profile, onSignIn, onSignOut }: AuthButtonPro
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [showInput, setShowInput] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   const handleSend = useCallback(async () => {
     if (!email.trim() || sending) return;
     setSending(true);
+    setErrorMessage(null);
     const { error } = await onSignIn(email.trim());
     setSending(false);
     if (!error) {
       setSent(true);
+    } else {
+      setErrorMessage(error);
     }
   }, [email, sending, onSignIn]);
 
@@ -52,7 +57,6 @@ export function AuthButton({ user, profile, onSignIn, onSignOut }: AuthButtonPro
               if (e.key === "Escape") setShowInput(false);
             }}
             placeholder="이메일 입력"
-            autoFocus
             className="w-[140px] bg-[#1e1f22] border border-[#3f4147] rounded px-2 py-1
               text-xs text-[#dbdee1] placeholder-[#6d6f78] outline-none
               focus:border-[#5865f2] transition-colors"
@@ -60,13 +64,16 @@ export function AuthButton({ user, profile, onSignIn, onSignOut }: AuthButtonPro
           <button
             type="button"
             onClick={handleSend}
-            disabled={!email.trim() || sending}
+            disabled={!isValidEmail || sending}
             className="px-2 py-1 rounded bg-[#5865f2] hover:bg-[#4752c4]
               text-white text-[10px] font-medium transition-colors
               disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {sending ? "..." : "전송"}
           </button>
+          {errorMessage && (
+            <span className="text-[10px] text-[#ff8e8e]">{errorMessage}</span>
+          )}
         </div>
       );
     }

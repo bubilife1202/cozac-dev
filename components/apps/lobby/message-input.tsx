@@ -6,9 +6,10 @@ import type { User } from "@supabase/supabase-js";
 interface MessageInputProps {
   user: User | null;
   onSend: (content: string) => void;
-  onSignIn: (email: string) => Promise<{ error: unknown }>;
+  onSignIn: (email: string) => Promise<{ error: string | null }>;
   sending: boolean;
   channelName: string;
+  sendError?: string | null;
 }
 
 export function MessageInput({
@@ -17,11 +18,16 @@ export function MessageInput({
   onSignIn,
   sending,
   channelName,
+  sendError,
 }: MessageInputProps) {
   const [text, setText] = useState("");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginSent, setLoginSent] = useState(false);
   const [loginSending, setLoginSending] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const isValidLoginEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    loginEmail.trim()
+  );
 
   const handleSubmit = useCallback(() => {
     if (!text.trim() || sending) return;
@@ -42,9 +48,14 @@ export function MessageInput({
   const handleLogin = useCallback(async () => {
     if (!loginEmail.trim() || loginSending) return;
     setLoginSending(true);
+    setLoginError(null);
     const { error } = await onSignIn(loginEmail.trim());
     setLoginSending(false);
-    if (!error) setLoginSent(true);
+    if (!error) {
+      setLoginSent(true);
+    } else {
+      setLoginError(error);
+    }
   }, [loginEmail, loginSending, onSignIn]);
 
   if (!user) {
@@ -84,7 +95,7 @@ export function MessageInput({
             <button
               type="button"
               onClick={handleLogin}
-              disabled={!loginEmail.trim() || loginSending}
+              disabled={!isValidLoginEmail || loginSending}
               className="flex items-center gap-2 px-4 py-2 rounded-md shrink-0
                 bg-[#5865f2] hover:bg-[#4752c4] active:bg-[#3c45a5]
                 text-white text-sm font-medium transition-colors
@@ -93,6 +104,9 @@ export function MessageInput({
               {loginSending ? "전송 중..." : "로그인"}
             </button>
           </div>
+          {loginError && (
+            <span className="text-xs text-[#ff8e8e]">{loginError}</span>
+          )}
         </div>
       </div>
     );
@@ -100,6 +114,9 @@ export function MessageInput({
 
   return (
     <div className="px-4 pb-4 pt-2">
+      {sendError && (
+        <div className="mb-2 text-xs text-[#ff8e8e]">{sendError}</div>
+      )}
       <div className="bg-[#383a40] rounded-lg flex items-end">
         <textarea
           value={text}

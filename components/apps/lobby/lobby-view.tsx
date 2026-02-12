@@ -25,6 +25,8 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
     messagesLoading,
     sendMessage,
     sendingMessage,
+    authError,
+    sendError,
   } = useLobby();
 
   const [showChannelList, setShowChannelList] = useState(true);
@@ -95,12 +97,16 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
               activeChannel={activeChannel}
               loading={messagesLoading}
             />
+            {authError && (
+              <div className="px-4 pb-1 text-xs text-[#ff8e8e]">{authError}</div>
+            )}
             <MessageInput
               user={user}
               onSend={sendMessage}
               onSignIn={signIn}
               sending={sendingMessage}
               channelName={activeChannel?.name ?? ""}
+              sendError={sendError}
             />
           </>
         )}
@@ -144,12 +150,17 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
           loading={messagesLoading}
         />
 
+        {authError && (
+          <div className="px-4 pb-1 text-xs text-[#ff8e8e]">{authError}</div>
+        )}
+
         <MessageInput
           user={user}
           onSend={sendMessage}
           onSignIn={signIn}
           sending={sendingMessage}
           channelName={activeChannel?.name ?? ""}
+          sendError={sendError}
         />
       </div>
     </div>

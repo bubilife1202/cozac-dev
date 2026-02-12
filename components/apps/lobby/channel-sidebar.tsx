@@ -11,7 +11,7 @@ interface ChannelSidebarProps {
   onSelectChannel: (id: string) => void;
   user: User | null;
   profile: Profile | null;
-  onSignIn: (email: string) => Promise<{ error: unknown }>;
+  onSignIn: (email: string) => Promise<{ error: string | null }>;
   onSignOut: () => void;
 }
 

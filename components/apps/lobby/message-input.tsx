@@ -2,11 +2,17 @@
 
 import { useState, useCallback } from "react";
 import type { User } from "@supabase/supabase-js";
+import type { LobbyOAuthProvider } from "./use-lobby";
 
 interface MessageInputProps {
   user: User | null;
+  emailLoginEnabled: boolean;
   onSend: (content: string) => void;
   onSignIn: (email: string) => Promise<{ error: string | null }>;
+  onSignInWithProvider: (
+    provider: LobbyOAuthProvider
+  ) => Promise<{ error: string | null }>;
+  onSignInAsGuest: () => Promise<{ error: string | null }>;
   sending: boolean;
   channelName: string;
   sendError?: string | null;
@@ -14,8 +20,11 @@ interface MessageInputProps {
 
 export function MessageInput({
   user,
+  emailLoginEnabled,
   onSend,
   onSignIn,
+  onSignInWithProvider,
+  onSignInAsGuest,
   sending,
   channelName,
   sendError,
@@ -58,6 +67,31 @@ export function MessageInput({
     }
   }, [loginEmail, loginSending, onSignIn]);
 
+  const handleProviderLogin = useCallback(
+    async (provider: LobbyOAuthProvider) => {
+      if (loginSending) return;
+      setLoginSending(true);
+      setLoginError(null);
+      const { error } = await onSignInWithProvider(provider);
+      setLoginSending(false);
+      if (error) {
+        setLoginError(error);
+      }
+    },
+    [loginSending, onSignInWithProvider]
+  );
+
+  const handleGuestLogin = useCallback(async () => {
+    if (loginSending) return;
+    setLoginSending(true);
+    setLoginError(null);
+    const { error } = await onSignInAsGuest();
+    setLoginSending(false);
+    if (error) {
+      setLoginError(error);
+    }
+  }, [loginSending, onSignInAsGuest]);
+
   if (!user) {
     if (loginSent) {
       return (
@@ -81,7 +115,41 @@ export function MessageInput({
           <span className="text-sm text-[#949ba4] shrink-0">
             채팅에 참여하려면
           </span>
-          <div className="flex items-center gap-2 flex-1 w-full sm:w-auto">
+          <div className="flex items-center gap-2 flex-1 w-full sm:w-auto flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleProviderLogin("google")}
+              disabled={loginSending}
+              className="px-3 py-2 rounded-md bg-[#4285f4] hover:bg-[#2f6fdb]
+                text-white text-sm font-medium transition-colors
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Google 로그인
+            </button>
+            <button
+              type="button"
+              onClick={() => handleProviderLogin("linkedin_oidc")}
+              disabled={loginSending}
+              className="px-3 py-2 rounded-md bg-[#0a66c2] hover:bg-[#0958a8]
+                text-white text-sm font-medium transition-colors
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              LinkedIn 로그인
+            </button>
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              disabled={loginSending}
+              className="px-3 py-2 rounded-md bg-[#2b2d31] hover:bg-[#232428]
+                text-white text-sm font-medium transition-colors border border-[#4e5058]
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              게스트 로그인
+            </button>
+          </div>
+
+          {emailLoginEnabled && (
+            <div className="flex items-center gap-2 flex-1 w-full sm:w-auto">
             <input
               type="email"
               value={loginEmail}
@@ -103,9 +171,15 @@ export function MessageInput({
             >
               {loginSending ? "전송 중..." : "로그인"}
             </button>
-          </div>
+            </div>
+          )}
           {loginError && (
             <span className="text-xs text-[#ff8e8e]">{loginError}</span>
+          )}
+          {!emailLoginEnabled && (
+            <span className="text-xs text-[#949ba4]">
+              이메일 로그인은 일시적으로 비활성화되어 있어요.
+            </span>
           )}
         </div>
       </div>

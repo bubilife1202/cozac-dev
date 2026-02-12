@@ -2,16 +2,29 @@
 
 import { useState, useCallback } from "react";
 import type { User } from "@supabase/supabase-js";
-import type { Profile } from "./use-lobby";
+import type { Profile, LobbyOAuthProvider } from "./use-lobby";
 
 interface AuthButtonProps {
   user: User | null;
   profile: Profile | null;
+  emailLoginEnabled: boolean;
   onSignIn: (email: string) => Promise<{ error: string | null }>;
+  onSignInWithProvider: (
+    provider: LobbyOAuthProvider
+  ) => Promise<{ error: string | null }>;
+  onSignInAsGuest: () => Promise<{ error: string | null }>;
   onSignOut: () => void;
 }
 
-export function AuthButton({ user, profile, onSignIn, onSignOut }: AuthButtonProps) {
+export function AuthButton({
+  user,
+  profile,
+  emailLoginEnabled,
+  onSignIn,
+  onSignInWithProvider,
+  onSignInAsGuest,
+  onSignOut,
+}: AuthButtonProps) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
@@ -32,6 +45,31 @@ export function AuthButton({ user, profile, onSignIn, onSignOut }: AuthButtonPro
     }
   }, [email, sending, onSignIn]);
 
+  const handleProviderSignIn = useCallback(
+    async (provider: LobbyOAuthProvider) => {
+      if (sending) return;
+      setSending(true);
+      setErrorMessage(null);
+      const { error } = await onSignInWithProvider(provider);
+      setSending(false);
+      if (error) {
+        setErrorMessage(error);
+      }
+    },
+    [sending, onSignInWithProvider]
+  );
+
+  const handleGuestSignIn = useCallback(async () => {
+    if (sending) return;
+    setSending(true);
+    setErrorMessage(null);
+    const { error } = await onSignInAsGuest();
+    setSending(false);
+    if (error) {
+      setErrorMessage(error);
+    }
+  }, [sending, onSignInAsGuest]);
+
   if (!user) {
     if (sent) {
       return (
@@ -47,10 +85,45 @@ export function AuthButton({ user, profile, onSignIn, onSignOut }: AuthButtonPro
 
     if (showInput) {
       return (
-        <div className="flex items-center gap-1.5">
-          <input
-            type="email"
-            value={email}
+        <div className="flex flex-col gap-1.5 w-full">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleProviderSignIn("google")}
+              disabled={sending}
+              className="px-2 py-1 rounded bg-[#4285f4] hover:bg-[#2f6fdb]
+                text-white text-[10px] font-medium transition-colors
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Google
+            </button>
+            <button
+              type="button"
+              onClick={() => handleProviderSignIn("linkedin_oidc")}
+              disabled={sending}
+              className="px-2 py-1 rounded bg-[#0a66c2] hover:bg-[#0958a8]
+                text-white text-[10px] font-medium transition-colors
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              LinkedIn
+            </button>
+            <button
+              type="button"
+              onClick={handleGuestSignIn}
+              disabled={sending}
+              className="px-2 py-1 rounded bg-[#2b2d31] hover:bg-[#232428]
+                text-white text-[10px] font-medium transition-colors border border-[#4e5058]
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              게스트
+            </button>
+          </div>
+
+          {emailLoginEnabled && (
+            <div className="flex items-center gap-1.5">
+            <input
+              type="email"
+              value={email}
             onChange={(e) => setEmail(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSend();
@@ -68,31 +141,72 @@ export function AuthButton({ user, profile, onSignIn, onSignOut }: AuthButtonPro
             className="px-2 py-1 rounded bg-[#5865f2] hover:bg-[#4752c4]
               text-white text-[10px] font-medium transition-colors
               disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {sending ? "..." : "전송"}
-          </button>
+            >
+              {sending ? "..." : "전송"}
+            </button>
+            </div>
+          )}
+
           {errorMessage && (
             <span className="text-[10px] text-[#ff8e8e]">{errorMessage}</span>
+          )}
+          {!emailLoginEnabled && (
+            <span className="text-[10px] text-[#949ba4]">
+              이메일 로그인은 일시적으로 비활성화되어 있어요.
+            </span>
           )}
         </div>
       );
     }
 
     return (
-      <button
-        type="button"
-        onClick={() => setShowInput(true)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-md
-          bg-[#4752c4] hover:bg-[#3c45a5] active:bg-[#343b8f]
-          text-white text-xs font-medium transition-colors"
-      >
-        <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="currentColor" aria-hidden="true">
-          <title>Email</title>
-          <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-          <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-        </svg>
-        로그인
-      </button>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          type="button"
+          onClick={() => handleProviderSignIn("google")}
+          disabled={sending}
+          className="px-2 py-1 rounded bg-[#4285f4] hover:bg-[#2f6fdb]
+            text-white text-[10px] font-medium transition-colors
+            disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Google
+        </button>
+        <button
+          type="button"
+          onClick={() => handleProviderSignIn("linkedin_oidc")}
+          disabled={sending}
+          className="px-2 py-1 rounded bg-[#0a66c2] hover:bg-[#0958a8]
+            text-white text-[10px] font-medium transition-colors
+            disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          LinkedIn
+        </button>
+        <button
+          type="button"
+          onClick={handleGuestSignIn}
+          disabled={sending}
+          className="px-2 py-1 rounded bg-[#2b2d31] hover:bg-[#232428]
+            text-white text-[10px] font-medium transition-colors border border-[#4e5058]
+            disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          게스트
+        </button>
+        {emailLoginEnabled && (
+          <button
+            type="button"
+            onClick={() => setShowInput(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-[#4752c4] hover:bg-[#3c45a5]
+              text-white text-[10px] font-medium transition-colors"
+          >
+            <svg viewBox="0 0 20 20" className="w-3 h-3" fill="currentColor" aria-hidden="true">
+              <title>Email</title>
+              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+            </svg>
+            메일
+          </button>
+        )}
+      </div>
     );
   }
 

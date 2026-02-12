@@ -2,7 +2,7 @@
 
 import type { Channel } from "./use-lobby";
 import type { User } from "@supabase/supabase-js";
-import type { Profile } from "./use-lobby";
+import type { Profile, LobbyOAuthProvider } from "./use-lobby";
 import { AuthButton } from "./auth-button";
 
 interface ChannelSidebarProps {
@@ -11,7 +11,12 @@ interface ChannelSidebarProps {
   onSelectChannel: (id: string) => void;
   user: User | null;
   profile: Profile | null;
+  emailLoginEnabled: boolean;
   onSignIn: (email: string) => Promise<{ error: string | null }>;
+  onSignInWithProvider: (
+    provider: LobbyOAuthProvider
+  ) => Promise<{ error: string | null }>;
+  onSignInAsGuest: () => Promise<{ error: string | null }>;
   onSignOut: () => void;
 }
 
@@ -21,7 +26,10 @@ export function ChannelSidebar({
   onSelectChannel,
   user,
   profile,
+  emailLoginEnabled,
   onSignIn,
+  onSignInWithProvider,
+  onSignInAsGuest,
   onSignOut,
 }: ChannelSidebarProps) {
   return (
@@ -59,7 +67,10 @@ export function ChannelSidebar({
         <AuthButton
           user={user}
           profile={profile}
+          emailLoginEnabled={emailLoginEnabled}
           onSignIn={onSignIn}
+          onSignInWithProvider={onSignInWithProvider}
+          onSignInAsGuest={onSignInAsGuest}
           onSignOut={onSignOut}
         />
       </div>

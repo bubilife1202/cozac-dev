@@ -15,7 +15,10 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
     user,
     profile,
     loading,
+    emailLoginEnabled,
     signIn,
+    signInWithProvider,
+    signInAsGuest,
     signOut,
     channels,
     activeChannel,
@@ -71,7 +74,10 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
             onSelectChannel={handleSelectChannel}
             user={user}
             profile={profile}
+            emailLoginEnabled={emailLoginEnabled}
             onSignIn={signIn}
+            onSignInWithProvider={signInWithProvider}
+            onSignInAsGuest={signInAsGuest}
             onSignOut={signOut}
           />
         ) : (
@@ -102,8 +108,11 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
             )}
             <MessageInput
               user={user}
+              emailLoginEnabled={emailLoginEnabled}
               onSend={sendMessage}
               onSignIn={signIn}
+              onSignInWithProvider={signInWithProvider}
+              onSignInAsGuest={signInAsGuest}
               sending={sendingMessage}
               channelName={activeChannel?.name ?? ""}
               sendError={sendError}
@@ -123,7 +132,10 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
           onSelectChannel={handleSelectChannel}
           user={user}
           profile={profile}
+          emailLoginEnabled={emailLoginEnabled}
           onSignIn={signIn}
+          onSignInWithProvider={signInWithProvider}
+          onSignInAsGuest={signInAsGuest}
           onSignOut={signOut}
         />
       </div>
@@ -156,8 +168,11 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
 
         <MessageInput
           user={user}
+          emailLoginEnabled={emailLoginEnabled}
           onSend={sendMessage}
           onSignIn={signIn}
+          onSignInWithProvider={signInWithProvider}
+          onSignInAsGuest={signInAsGuest}
           sending={sendingMessage}
           channelName={activeChannel?.name ?? ""}
           sendError={sendError}

@@ -8,9 +8,12 @@ interface LobbyActionResult {
   error: string | null;
 }
 
+export type LobbyOAuthProvider = "google" | "linkedin_oidc";
+const EMAIL_LOGIN_ENABLED = process.env.NEXT_PUBLIC_LOBBY_EMAIL_LOGIN === "true";
+
 export interface Profile {
   id: string;
-  email: string;
+  email: string | null;
   display_name: string;
   avatar_url: string | null;
   created_at: string;
@@ -86,6 +89,25 @@ export function useLobby() {
     }
     return "로그인 링크 발송에 실패했어요. 잠시 후 다시 시도해 주세요.";
   }, []);
+
+  const mapOAuthErrorMessage = useCallback(
+    (message: string, provider: LobbyOAuthProvider): string => {
+      const providerLabel = provider === "google" ? "Google" : "LinkedIn";
+      const lowerMessage = message.toLowerCase();
+
+      if (
+        lowerMessage.includes("provider is not enabled") ||
+        lowerMessage.includes("unsupported provider") ||
+        lowerMessage.includes("oauth_provider_not_supported") ||
+        lowerMessage.includes("missing oauth")
+      ) {
+        return `${providerLabel} 로그인이 아직 설정되지 않았어요. 관리자 설정이 필요해요.`;
+      }
+
+      return `${providerLabel} 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.`;
+    },
+    []
+  );
 
   const ensureProfile = useCallback(
     async (currentUser: User): Promise<Profile | null> => {
@@ -168,6 +190,13 @@ export function useLobby() {
 
   const signIn = useCallback(
     async (email: string): Promise<LobbyActionResult> => {
+      if (!EMAIL_LOGIN_ENABLED) {
+        return {
+          error:
+            "이메일 로그인은 현재 비활성화되어 있어요. Google, LinkedIn 또는 게스트 로그인을 사용해 주세요.",
+        };
+      }
+
       const normalizedEmail = email.trim().toLowerCase();
       const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -190,6 +219,42 @@ export function useLobby() {
       return { error: null };
     },
     [supabase, mapAuthErrorMessage]
+  );
+
+  const signInAsGuest = useCallback(async (): Promise<LobbyActionResult> => {
+    const { error } = await supabase.auth.signInAnonymously();
+
+    if (error) {
+      if (error.message.toLowerCase().includes("provider is disabled")) {
+        return {
+          error:
+            "게스트 로그인이 비활성화되어 있어요. 관리자 설정이 필요해요.",
+        };
+      }
+      return {
+        error: "게스트 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.",
+      };
+    }
+
+    return { error: null };
+  }, [supabase]);
+
+  const signInWithProvider = useCallback(
+    async (provider: LobbyOAuthProvider): Promise<LobbyActionResult> => {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: window.location.origin + "/lobby",
+        },
+      });
+
+      if (error) {
+        return { error: mapOAuthErrorMessage(error.message, provider) };
+      }
+
+      return { error: null };
+    },
+    [supabase, mapOAuthErrorMessage]
   );
 
   const signOut = useCallback(async () => {
@@ -357,7 +422,10 @@ export function useLobby() {
     user,
     profile,
     loading,
+    emailLoginEnabled: EMAIL_LOGIN_ENABLED,
     signIn,
+    signInWithProvider,
+    signInAsGuest,
     signOut,
     channels,
     activeChannel,

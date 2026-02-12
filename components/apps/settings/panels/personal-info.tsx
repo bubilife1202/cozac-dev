@@ -7,9 +7,9 @@ interface Device {
 }
 
 const devices: Device[] = [
-  { name: "cozac's Laptop", model: "This Laptop", type: "macbook" },
-  { name: "cozac's Phone", model: "Phone", type: "iphone" },
-  { name: "cozac's Tablet", model: "Tablet", type: "ipad" },
+  { name: "jinbae's Laptop", model: "This Laptop", type: "macbook" },
+  { name: "jinbae's Phone", model: "Phone", type: "iphone" },
+  { name: "jinbae's Tablet", model: "Tablet", type: "ipad" },
   { name: "Family Room", model: "Smart TV", type: "smart-tv" },
   { name: "Entertainment Room", model: "Smart TV", type: "smart-tv" },
   { name: "Bedroom", model: "Smart TV", type: "smart-tv" },
@@ -83,7 +83,7 @@ export function PersonalInfoPanel() {
         <div className="divide-y divide-border/50">
           <div className="flex items-center justify-between px-4 py-3">
             <span className="text-xs">Name</span>
-            <span className="text-xs text-muted-foreground">cozac</span>
+            <span className="text-xs text-muted-foreground">jinbae park</span>
           </div>
           <div className="flex items-center justify-between px-4 py-3">
             <span className="text-xs">Birthday</span>

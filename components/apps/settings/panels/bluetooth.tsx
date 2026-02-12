@@ -15,18 +15,18 @@ interface BluetoothDevice {
 }
 
 const myDevicesDesktop: BluetoothDevice[] = [
-  { name: "cozac's Magic Keyboard", connected: true, battery: 91, type: "keyboard" },
-  { name: "cozac's Magic Trackpad", connected: true, battery: 20, type: "trackpad" },
+  { name: "jinbae's Keyboard", connected: true, battery: 91, type: "keyboard" },
+  { name: "jinbae's Trackpad", connected: true, battery: 20, type: "trackpad" },
   { name: "Nothing Headphones", connected: false, type: "headphones" },
-  { name: "cozac's AirPods Max", connected: false, type: "airpods-max" },
-  { name: "cozac's AirPods Pro", connected: false, type: "airpods" },
+  { name: "jinbae's Headphones", connected: false, type: "airpods-max" },
+  { name: "jinbae's Earbuds", connected: false, type: "airpods" },
   { name: "Flipper Reg0l1", connected: false, type: "headphones" },
 ];
 
 const myDevicesMobile = [
   { name: "Nothing Headphones", connected: true },
-  { name: "cozac's AirPods Max", connected: false },
-  { name: "cozac's AirPods Pro", connected: false },
+  { name: "jinbae's Headphones", connected: false },
+  { name: "jinbae's Earbuds", connected: false },
   { name: "Flipper Reg0l1", connected: false },
   { name: "Matic-Robot-07m-53jp", connected: false },
   { name: "Porsche BT 1524", connected: false },
@@ -146,7 +146,7 @@ export function BluetoothPanel({ isMobile = false }: BluetoothPanelProps) {
 
         {/* Discoverable note */}
         <p className="text-sm text-muted-foreground px-2">
-          This device is discoverable as &quot;cozac&apos;s phone&quot; while Bluetooth Settings is open.
+          This device is discoverable as &quot;jinbae&apos;s phone&quot; while Bluetooth Settings is open.
         </p>
 
         {/* My Devices section */}
@@ -220,7 +220,7 @@ export function BluetoothPanel({ isMobile = false }: BluetoothPanelProps) {
         <>
           {/* Discoverable text */}
           <p className="text-xs text-muted-foreground py-4 border-b border-border/50">
-            This Mac is discoverable as &quot;cozac&apos;s MacBook Air&quot; while Bluetooth Settings is open.
+            This device is discoverable as &quot;jinbae&apos;s Laptop&quot; while Bluetooth Settings is open.
           </p>
 
           {/* My Devices section */}

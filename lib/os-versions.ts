@@ -99,7 +99,7 @@ export const OS_VERSIONS: OSVersion[] = [
   },
 ];
 
-export const DEFAULT_OS_VERSION_ID = "sierra";
+export const DEFAULT_OS_VERSION_ID = "tahoe";
 
 export function getOSVersion(id: string): OSVersion {
   return OS_VERSIONS.find((os) => os.id === id) ?? OS_VERSIONS.find((os) => os.id === DEFAULT_OS_VERSION_ID)!;

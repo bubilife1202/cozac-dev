@@ -5,10 +5,10 @@ import { useWindowFocus } from "@/lib/window-focus-context";
 import { useSystemSettings } from "@/lib/system-settings-context";
 import { useRecents } from "@/lib/recents-context";
 
-const USERNAME = "cozac";
-const HOSTNAME = "cozacs-MacBook-Air";
-const HOME_DIR = "/Users/cozac";
-const PROJECTS_DIR = "/Users/cozac/Projects";
+const USERNAME = "jinbae";
+const HOSTNAME = "jinbaes-Laptop";
+const HOME_DIR = "/Users/jinbae";
+const PROJECTS_DIR = "/Users/jinbae/Projects";
 
 // Storage key for persisting terminal state
 const ITERM_STORAGE_KEY = "iterm-terminal-state";
@@ -79,16 +79,16 @@ interface FileNode {
 // Base file system (static content)
 const BASE_FILE_SYSTEM: Record<string, FileNode> = {
   "/": { type: "dir", contents: ["Users", "Applications", "System", "Library"] },
-  "/Users": { type: "dir", contents: ["cozac", "Shared"] },
-  "/Users/cozac": { type: "dir", contents: ["Desktop", "Documents", "Downloads", "Projects"] },
-  "/Users/cozac/Desktop": { type: "dir", contents: ["hello.md"] },
-  "/Users/cozac/Desktop/hello.md": {
+  "/Users": { type: "dir", contents: ["jinbae", "Shared"] },
+  "/Users/jinbae": { type: "dir", contents: ["Desktop", "Documents", "Downloads", "Projects"] },
+  "/Users/jinbae/Desktop": { type: "dir", contents: ["hello.md"] },
+  "/Users/jinbae/Desktop/hello.md": {
     type: "file",
     content: "hello world!",
   },
-  "/Users/cozac/Documents": { type: "dir", contents: [] },
-  "/Users/cozac/Downloads": { type: "dir", contents: [] },
-  "/Users/cozac/Projects": { type: "dir", contents: [] }, // Dynamic from GitHub
+  "/Users/jinbae/Documents": { type: "dir", contents: [] },
+  "/Users/jinbae/Downloads": { type: "dir", contents: [] },
+  "/Users/jinbae/Projects": { type: "dir", contents: [] }, // Dynamic from GitHub
   "/Applications": { type: "dir", contents: ["iTerm.app", "Browser.app", "Notes.app", "Messages.app"] },
   "/System": { type: "dir", contents: ["Library"] },
   "/Library": { type: "dir", contents: ["Fonts", "Preferences"] },
@@ -492,12 +492,12 @@ Note: Projects folder contains my real GitHub repositories!`;
                     'c.          ${USERNAME}@${HOSTNAME}
                  ,xNMM.          -----------------------
                .OMMMMo           OS: ${currentOS.name} ${currentOS.version}
-               OMMM0,            Host: Laptop (M2, 2022)
+               OMMM0,            Host: Laptop (M5, 2025)
      .;loddo:' loolloddol;.      Kernel: Darwin ${currentOS.darwinVersion}
    cKMMMMMMMMMMNWMMMMMMMMMM0:    Uptime: ${Math.floor(Math.random() * 100) + 1} days
  .KMMMMMMMMMMMMMMMMMMMMMMMWd.    Shell: zsh 5.9
  XMMMMMMMMMMMMMMMMMMMMMMMX.      Terminal: iTerm2
-;MMMMMMMMMMMMMMMMMMMMMMMM:       CPU: M2
+;MMMMMMMMMMMMMMMMMMMMMMMM:       CPU: M5
 :MMMMMMMMMMMMMMMMMMMMMMMM:       Memory: 8GB
 .MMMMMMMMMMMMMMMMMMMMMMMMX.
  kMMMMMMMMMMMMMMMMMMMMMMMMWd.

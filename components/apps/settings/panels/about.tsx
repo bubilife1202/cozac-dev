@@ -32,7 +32,7 @@ export function AboutPanel({ isMobile = false, onCategorySelect }: AboutPanelPro
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
             <span className="text-base">Name</span>
             <div className="flex items-center gap-1">
-                <span className="text-base text-muted-foreground">cozac&apos;s phone</span>
+                <span className="text-base text-muted-foreground">jinbae&apos;s phone</span>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </div>
           </div>
@@ -159,7 +159,7 @@ export function AboutPanel({ isMobile = false, onCategorySelect }: AboutPanelPro
           </svg>
         </div>
         <h2 className="text-xl font-semibold">Laptop</h2>
-        <p className="text-xs text-muted-foreground">M2, 2022</p>
+        <p className="text-xs text-muted-foreground">M5, 2025</p>
       </div>
 
       {/* Specs Table */}
@@ -167,11 +167,11 @@ export function AboutPanel({ isMobile = false, onCategorySelect }: AboutPanelPro
         <div className="divide-y divide-border/50">
           <div className="flex justify-between px-4 py-3">
             <span className="text-xs text-muted-foreground">Name</span>
-            <span className="text-xs">cozac&apos;s Laptop</span>
+            <span className="text-xs">jinbae&apos;s Laptop</span>
           </div>
           <div className="flex justify-between px-4 py-3">
             <span className="text-xs text-muted-foreground">Chip</span>
-            <span className="text-xs">M2</span>
+            <span className="text-xs">M5</span>
           </div>
           <div className="flex justify-between px-4 py-3">
             <span className="text-xs text-muted-foreground">Memory</span>

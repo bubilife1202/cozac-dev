@@ -42,7 +42,7 @@ export function Nav({ isMobile, isDesktop = false }: NavProps) {
         closeLabel={inShell ? "Close window" : "Close tab"}
       />
       <div className="flex-1 text-center">
-        <span className="text-zinc-500 dark:text-zinc-400 text-sm">cozac@cozacs-MacBook-Air</span>
+        <span className="text-zinc-500 dark:text-zinc-400 text-sm">jinbae@jinbaes-Laptop</span>
       </div>
       <div className="w-[68px]" /> {/* Spacer to balance the layout */}
     </div>

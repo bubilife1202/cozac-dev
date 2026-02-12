@@ -1,5 +1,5 @@
 export const siteConfig = {
-  name: "cozac",
-  title: "cozac",
+  name: "jinbae park",
+  title: "jinbae park",
   url: "https://cozac.dev",
 };

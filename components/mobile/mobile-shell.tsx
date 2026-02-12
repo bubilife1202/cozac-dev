@@ -157,7 +157,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
                 : "0px",
             }}
           >
-            <IOSStatusBar variant="dark" />
+            <IOSStatusBar variant="dark" showBackButton onGoHome={handleGoHome} />
             <div className="flex-1 min-h-0 pt-[44px]">
               {renderedApp === "notes" && (
                 <NotesApp isMobile={true} inShell={false} initialSlug={initialNoteSlug} />

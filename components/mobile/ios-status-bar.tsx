@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 
 interface IOSStatusBarProps {
   variant: "light" | "dark";
+  showBackButton?: boolean;
+  onGoHome?: () => void;
 }
 
 function useCurrentTime() {
@@ -24,7 +26,7 @@ function useCurrentTime() {
   return time;
 }
 
-export function IOSStatusBar({ variant }: IOSStatusBarProps) {
+export function IOSStatusBar({ variant, showBackButton, onGoHome }: IOSStatusBarProps) {
   const time = useCurrentTime();
   const color = variant === "light" ? "white" : "currentColor";
 
@@ -36,10 +38,23 @@ export function IOSStatusBar({ variant }: IOSStatusBarProps) {
         variant === "light" ? "text-white" : "text-black dark:text-white"
       )}
     >
-      {/* Left: Time */}
-      <span className="text-[15px] font-semibold tracking-tight min-w-[54px]">
-        {time}
-      </span>
+      {/* Left: Back button or Time */}
+      {showBackButton ? (
+        <button
+          type="button"
+          onClick={onGoHome}
+          className="flex items-center gap-1 text-[15px] font-semibold tracking-tight"
+        >
+          <svg width="12" height="20" viewBox="0 0 12 20" fill="none" aria-hidden="true">
+            <path d="M10 2L2 10L10 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span>홈</span>
+        </button>
+      ) : (
+        <span className="text-[15px] font-semibold tracking-tight min-w-[54px]">
+          {time}
+        </span>
+      )}
 
       {/* Center: Dynamic Island placeholder */}
       <div className="flex-1" />

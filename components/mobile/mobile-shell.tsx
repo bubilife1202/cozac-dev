@@ -10,6 +10,7 @@ import { FinderApp } from "@/components/apps/finder/finder-app";
 import { PhotosApp } from "@/components/apps/photos/photos-app";
 import { CalendarApp } from "@/components/apps/calendar/calendar-app";
 import { MusicApp } from "@/components/apps/music/music-app";
+import { LobbyApp } from "@/components/apps/lobby/lobby-app";
 import { TextEditApp } from "@/components/apps/textedit";
 import { PreviewApp, type PreviewFileType } from "@/components/apps/preview";
 import { getTextEditContent } from "@/lib/file-storage";
@@ -25,9 +26,10 @@ const SPRING_BOUNCE = "cubic-bezier(0.34, 1.56, 0.64, 1)";
 const SPRING_DECEL = "cubic-bezier(0.22, 1, 0.36, 1)";
 const OPEN_DURATION = 420;
 const CLOSE_DURATION = 340;
-const DISMISS_THRESHOLD = 150;
+const DISMISS_THRESHOLD = 240;
 const RUBBER_BAND_COEFF = 0.45;
-const VELOCITY_DISMISS = 800;
+const VELOCITY_DISMISS = 1200;
+const DEAD_ZONE = 12;
 
 interface MobileShellProps {
   initialApp?: string;
@@ -155,6 +157,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
     else if (path.startsWith("/photos")) detectedApp = "photos";
     else if (path.startsWith("/calendar")) detectedApp = "calendar";
     else if (path.startsWith("/music")) detectedApp = "music";
+    else if (path.startsWith("/lobby")) detectedApp = "lobby";
     else if (path.startsWith("/textedit")) detectedApp = "textedit";
     else if (path.startsWith("/preview")) detectedApp = "preview";
     else if (initialApp) detectedApp = initialApp;
@@ -273,7 +276,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
       0,
       1,
       0,
-      380,
+      340,
       () => {
         if (el) {
           el.style.transition = "";
@@ -282,7 +285,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
         }
         setIsDragging(false);
       },
-      1.6
+      2.1
     );
   }, []);
 
@@ -339,7 +342,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
         const absDY = Math.abs(deltaY);
         const absDX = Math.abs(deltaX);
 
-        if (absDY < 8 && absDX < 8) return;
+        if (absDY < DEAD_ZONE && absDX < DEAD_ZONE) return;
 
         if (absDX > absDY * 1.2) {
           isGestureRejected.current = true;
@@ -377,12 +380,13 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
       touchTimestamp.current = now;
       touchCurrentY.current = touch.clientY;
 
-      const dragDistance = Math.max(0, deltaY);
+      const rawDrag = Math.max(0, deltaY);
+      const dragDistance = Math.max(0, rawDrag - DEAD_ZONE);
       const screenHeight = window.innerHeight;
-      const resistedY = rubberBand(dragDistance, screenHeight, RUBBER_BAND_COEFF);
+      const resistedY = dragDistance > 0 ? rubberBand(dragDistance, screenHeight, RUBBER_BAND_COEFF) : 0;
 
       const progress = Math.min(resistedY / (screenHeight * 0.4), 1);
-      const scale = 1 - progress * 0.12;
+      const scale = 1 - progress * 0.08;
       const radius = progress * 44;
 
       const el = appContainerRef.current;
@@ -542,6 +546,9 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
                 <CalendarApp isMobile={true} inShell={false} />
               )}
               {renderedApp === "music" && <MusicApp isMobile={true} />}
+              {renderedApp === "lobby" && (
+                <LobbyApp isMobile={true} inShell={false} />
+              )}
               {renderedApp === "textedit" &&
                 (() => {
                   const filePath = topmostTextEdit?.filePath;

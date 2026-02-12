@@ -17,6 +17,7 @@ import { FinderApp, type SidebarItem as FinderTab } from "@/components/apps/find
 import { PhotosApp } from "@/components/apps/photos/photos-app";
 import { CalendarApp } from "@/components/apps/calendar/calendar-app";
 import { MusicApp } from "@/components/apps/music/music-app";
+import { LobbyApp } from "@/components/apps/lobby/lobby-app";
 import { TextEditWindow } from "@/components/apps/textedit";
 import { PreviewWindow, PREVIEW_TITLE_BAR_HEIGHT, type PreviewFileType } from "@/components/apps/preview";
 import { getPreviewMetadataFromPath } from "@/lib/preview-utils";
@@ -525,6 +526,10 @@ function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFi
 
           <Window appId="music">
             <MusicApp />
+          </Window>
+
+          <Window appId="lobby">
+            <LobbyApp inShell={true} />
           </Window>
 
           {/* TextEdit - multi-window support */}

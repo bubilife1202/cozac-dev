@@ -79,6 +79,17 @@ export const APPS: AppConfig[] = [
     menuBarTitle: "iTerm",
   },
   {
+    id: "lobby",
+    name: "Lobby",
+    icon: "/lobby.svg",
+    description: "Community chat",
+    accentColor: "#5865F2",
+    defaultPosition: { x: 160, y: 70 },
+    defaultSize: { width: 900, height: 600 },
+    minSize: { width: 600, height: 400 },
+    menuBarTitle: "Lobby",
+  },
+  {
     id: "settings",
     name: "Settings",
     icon: "/settings.png",

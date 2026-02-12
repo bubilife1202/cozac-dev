@@ -17,11 +17,12 @@ export function ShutdownOverlay({ onBootComplete }: ShutdownOverlayProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[100] bg-black flex items-center justify-center cursor-pointer"
+    <button
+      type="button"
+      className="fixed inset-0 z-[100] bg-[radial-gradient(circle_at_20%_20%,#1e3a8a_0%,#0b1220_38%,#000_100%)] flex items-center justify-center cursor-pointer"
       onClick={handleClick}
     >
-      {isBooting && <BootSequence onComplete={onBootComplete} />}
-    </div>
+      {isBooting && <BootSequence onComplete={onBootComplete} subtitle="booting up" />}
+    </button>
   );
 }

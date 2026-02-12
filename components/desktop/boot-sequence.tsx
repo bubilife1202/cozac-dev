@@ -5,9 +5,14 @@ import { useState, useEffect } from "react";
 interface BootSequenceProps {
   onComplete: () => void;
   autoStart?: boolean;
+  subtitle?: string;
 }
 
-export function BootSequence({ onComplete, autoStart = true }: BootSequenceProps) {
+export function BootSequence({
+  onComplete,
+  autoStart = true,
+  subtitle = "starting virtual desktop",
+}: BootSequenceProps) {
   const [progress, setProgress] = useState(0);
   const [started, setStarted] = useState(autoStart);
   const [pulse, setPulse] = useState(false);
@@ -44,26 +49,28 @@ export function BootSequence({ onComplete, autoStart = true }: BootSequenceProps
   }
 
   return (
-    <div className="flex flex-col items-center gap-7">
+    <div className="flex flex-col items-center gap-6">
       <div
-        className={`w-24 h-24 rounded-[26px] border border-white/20 flex items-center justify-center transition-all duration-500 ${
-          pulse ? "bg-white/14 scale-105" : "bg-white/8 scale-100"
+        className={`w-28 h-28 rounded-[30px] border border-white/25 flex items-center justify-center transition-all duration-500 shadow-[0_0_40px_rgba(96,165,250,0.25)] ${
+          pulse ? "bg-white/16 scale-105" : "bg-white/8 scale-100"
         }`}
       >
-        <span className="text-white font-semibold text-2xl tracking-tight">cz</span>
+        <span className="text-white font-semibold text-[32px] tracking-tight">cz</span>
       </div>
 
       <div className="text-center leading-tight">
-        <div className="text-white/95 text-2xl font-semibold tracking-tight">cozac.dev</div>
-        <div className="text-white/55 text-sm">starting virtual desktop</div>
+        <div className="text-white text-[34px] font-semibold tracking-tight">cozac.dev</div>
+        <div className="text-white/60 text-sm mt-1">{subtitle}</div>
       </div>
 
-      <div className="w-52 h-1.5 bg-white/20 rounded-full overflow-hidden">
+      <div className="w-60 h-1.5 bg-white/20 rounded-full overflow-hidden">
         <div
           className="h-full bg-white/80 rounded-full transition-all duration-150"
           style={{ width: `${progress}%` }}
         />
       </div>
+
+      <div className="text-white/55 text-xs tabular-nums">{progress}%</div>
 
       <div className="flex items-center gap-1.5" aria-hidden="true">
         <span className={`w-1.5 h-1.5 rounded-full bg-white/65 transition-all duration-300 ${pulse ? "opacity-100" : "opacity-45"}`} />

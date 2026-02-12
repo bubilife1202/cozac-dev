@@ -37,7 +37,7 @@ function AppIcon({
     <button
       type="button"
       onClick={onTap}
-      className="flex flex-col items-center gap-1.5 active:scale-90 transition-transform duration-150"
+      className="active:scale-[0.85] active:brightness-90 transition-all duration-200 ease-out"
     >
       <div
         className="rounded-[14px] overflow-hidden shadow-lg"
@@ -78,7 +78,7 @@ export function IOSHomeScreen({ onAppOpen }: IOSHomeScreenProps) {
         />
       </div>
 
-      <div className="relative flex-1 pt-[60px] px-6 pb-4 overflow-y-auto">
+      <div className="relative flex-1 pt-[60px] px-6 pb-4 overflow-y-auto overscroll-y-contain" style={{ WebkitOverflowScrolling: "touch" }}>
         <div className="grid grid-cols-4 gap-y-6 gap-x-4 justify-items-center">
           {gridApps.map((app) => (
             <AppIcon key={app.id} app={app} onTap={() => onAppOpen(app.id)} />
@@ -92,7 +92,7 @@ export function IOSHomeScreen({ onAppOpen }: IOSHomeScreenProps) {
             key={app.id}
             type="button"
             onClick={() => onAppOpen(app.id)}
-            className="active:scale-90 transition-transform duration-150"
+            className="active:scale-[0.85] active:brightness-90 transition-all duration-200 ease-out"
           >
             <div className="w-[58px] h-[58px] rounded-[14px] overflow-hidden shadow-lg">
               <Image

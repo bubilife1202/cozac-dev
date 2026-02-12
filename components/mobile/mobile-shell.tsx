@@ -107,7 +107,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setActiveApp(appId);
-        setTimeout(() => setTransition("idle"), 300);
+        setTimeout(() => setTransition("idle"), 350);
       });
     });
   }, []);
@@ -118,8 +118,19 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
       setActiveApp(null);
       setRenderedApp(null);
       setTransition("idle");
-    }, 300);
+    }, 280);
   }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (activeApp !== null) {
+        handleGoHome();
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [activeApp, handleGoHome]);
 
   if (!isHydrated) {
     return <div className="min-h-dvh bg-background" />;
@@ -139,21 +150,23 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
 
         {isAppVisible && (
           <div
-            className="absolute inset-0 z-50 flex flex-col bg-background"
+            className="absolute inset-0 z-50 flex flex-col bg-background origin-center"
             style={{
-              transition: "transform 300ms ease-out, opacity 300ms ease-out, border-radius 300ms ease-out",
+              transition: transition === "opening" 
+                ? "transform 350ms cubic-bezier(0.2, 0.9, 0.3, 1), opacity 250ms ease-out"
+                : "transform 280ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms ease-in",
               transform: transition === "closing"
-                ? "scale(0.9)"
+                ? "scale(0.92) translateY(20px)"
                 : transition === "opening" && activeApp !== renderedApp
-                  ? "scale(0.9)"
-                  : "scale(1)",
+                  ? "scale(0.85) translateY(30px)"
+                  : "scale(1) translateY(0)",
               opacity: transition === "closing"
                 ? 0
                 : transition === "opening" && activeApp !== renderedApp
                   ? 0
                   : 1,
               borderRadius: transition === "closing" || (transition === "opening" && activeApp !== renderedApp)
-                ? "40px"
+                ? "32px"
                 : "0px",
             }}
           >

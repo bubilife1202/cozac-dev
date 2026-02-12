@@ -35,7 +35,7 @@ export function IOSStatusBar({ variant, showBackButton, onGoHome }: IOSStatusBar
       className={cn(
         "absolute top-0 left-0 right-0 z-[200] flex items-center justify-between px-6 select-none pointer-events-auto",
         "h-[44px]",
-        variant === "light" ? "text-white" : "text-black dark:text-white"
+        variant === "light" ? "text-white" : "text-black dark:text-white bg-background"
       )}
     >
       {/* Left: Back button or Time */}

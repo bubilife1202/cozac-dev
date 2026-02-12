@@ -33,7 +33,7 @@ export function IOSStatusBar({ variant, showBackButton, onGoHome }: IOSStatusBar
   return (
     <div
       className={cn(
-        "fixed top-0 left-0 right-0 z-[100] flex items-center justify-between px-6 select-none",
+        "absolute top-0 left-0 right-0 z-[200] flex items-center justify-between px-6 select-none pointer-events-auto",
         "h-[44px]",
         variant === "light" ? "text-white" : "text-black dark:text-white"
       )}
@@ -43,7 +43,7 @@ export function IOSStatusBar({ variant, showBackButton, onGoHome }: IOSStatusBar
         <button
           type="button"
           onClick={onGoHome}
-          className="flex items-center gap-1 text-[15px] font-semibold tracking-tight"
+          className="flex items-center gap-0.5 text-[15px] font-semibold tracking-tight min-w-[54px]"
         >
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" aria-hidden="true">
             <path d="M10 2L2 10L10 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>

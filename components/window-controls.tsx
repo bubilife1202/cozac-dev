@@ -12,7 +12,8 @@ interface WindowControlsProps {
   maximizeLabel?: string;
   restoreLabel?: string;
   className?: string;
-  closeOnly?: boolean; // Show grey circles instead of yellow/green for minimize/maximize
+  closeOnly?: boolean;
+  hideOnMobile?: boolean;
 }
 
 interface WindowControlButtonProps {
@@ -103,15 +104,20 @@ export function WindowControls({
   restoreLabel = "Restore window",
   className,
   closeOnly = false,
+  hideOnMobile = false,
 }: WindowControlsProps) {
   if (!inShell && !showWhenNotInShell) {
+    return null;
+  }
+
+  if (hideOnMobile && typeof window !== "undefined" && window.innerWidth < 768) {
     return null;
   }
 
   const isCloseInteractive = !!onClose || inShell;
 
   return (
-    <div className={cn("window-controls group flex items-center gap-1.5", className)}>
+    <div className={cn("window-controls group hidden md:flex items-center gap-1.5", className)}>
       <WindowControlButton
         colorClass="bg-red-500"
         icon={<CloseIcon />}

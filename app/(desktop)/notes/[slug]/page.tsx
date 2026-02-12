@@ -22,15 +22,19 @@ const getNote = cache(async (slug: string) => {
 
 // Dynamically determine if this is a user note
 export async function generateStaticParams() {
-  const supabase = createBrowserClient();
-  const { data: posts } = await supabase
-    .from("notes")
-    .select("slug")
-    .eq("public", true);
+  try {
+    const supabase = createBrowserClient();
+    const { data: posts } = await supabase
+      .from("notes")
+      .select("slug")
+      .eq("public", true);
 
-  return posts!.map(({ slug }) => ({
-    slug,
-  }));
+    return (posts ?? []).map(({ slug }) => ({
+      slug,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // Use dynamic rendering for non-public notes

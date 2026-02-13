@@ -573,7 +573,11 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
                 />
               )}
             </div>
-            <IOSHomeIndicator variant="dark" onGoHome={handleGoHome} />
+            <IOSHomeIndicator
+              variant="dark"
+              onGoHome={handleGoHome}
+              position="inline"
+            />
           </div>
         )}
       </div>

@@ -6,9 +6,14 @@ import { cn } from "@/lib/utils";
 interface IOSHomeIndicatorProps {
   variant: "light" | "dark";
   onGoHome?: () => void;
+  position?: "fixed" | "inline";
 }
 
-export function IOSHomeIndicator({ variant, onGoHome }: IOSHomeIndicatorProps) {
+export function IOSHomeIndicator({
+  variant,
+  onGoHome,
+  position = "fixed",
+}: IOSHomeIndicatorProps) {
   const touchStartY = useRef<number | null>(null);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -30,8 +35,15 @@ export function IOSHomeIndicator({ variant, onGoHome }: IOSHomeIndicatorProps) {
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-[100] flex items-end justify-center pb-2",
-        onGoHome ? "h-[120px]" : "h-[34px] pointer-events-none"
+        position === "fixed"
+          ? "fixed bottom-0 left-0 right-0 z-[100]"
+          : "relative",
+        "flex items-end justify-center pb-2",
+        onGoHome
+          ? "h-[44px]"
+          : position === "fixed"
+            ? "h-[34px] pointer-events-none"
+            : "h-[34px]"
       )}
       onTouchStart={onGoHome ? handleTouchStart : undefined}
       onTouchEnd={onGoHome ? handleTouchEnd : undefined}

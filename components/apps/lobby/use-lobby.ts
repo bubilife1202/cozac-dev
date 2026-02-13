@@ -172,14 +172,20 @@ export function useLobby() {
           setAuthError(
             "세션을 확인하지 못했어요. 새로고침 후 다시 로그인해 주세요."
           );
+          setLoading(false);
           return;
         }
 
         setUser(session?.user ?? null);
         setAuthError(null);
 
+        setLoading(false);
+
         if (session?.user) {
-          await ensureProfile(session.user);
+          ensureProfile(session.user).catch(() => {
+            if (!mounted) return;
+            setAuthError("프로필 정보를 불러오지 못했어요.");
+          });
         }
       } catch (error) {
         if (!mounted) return;
@@ -188,10 +194,10 @@ export function useLobby() {
         setAuthError(
           "세션을 확인하지 못했어요. 새로고침 후 다시 로그인해 주세요."
         );
+        setLoading(false);
       } finally {
         if (mounted) {
           window.clearTimeout(loadingTimeout);
-          setLoading(false);
         }
       }
     };
@@ -205,7 +211,10 @@ export function useLobby() {
         setUser(session?.user ?? null);
         setAuthError(null);
         if (session?.user) {
-          await ensureProfile(session.user);
+          ensureProfile(session.user).catch(() => {
+            if (!mounted) return;
+            setAuthError("프로필 정보를 불러오지 못했어요.");
+          });
         } else {
           setProfile(null);
         }

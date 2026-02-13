@@ -147,28 +147,80 @@ export function useLobby() {
   );
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setAuthError(null);
-      if (session?.user) {
-        await ensureProfile(session.user);
-      }
+    let mounted = true;
+
+    const loadingTimeout = window.setTimeout(() => {
+      if (!mounted) return;
+      setAuthError(
+        "세션 초기화가 지연되고 있어요. 새로고침 후 다시 로그인해 주세요."
+      );
       setLoading(false);
-    });
+    }, 10000);
+
+    const init = async () => {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
+        if (error) {
+          setUser(null);
+          setProfile(null);
+          setAuthError(
+            "세션을 확인하지 못했어요. 새로고침 후 다시 로그인해 주세요."
+          );
+          return;
+        }
+
+        setUser(session?.user ?? null);
+        setAuthError(null);
+
+        if (session?.user) {
+          await ensureProfile(session.user);
+        }
+      } catch (error) {
+        if (!mounted) return;
+        setUser(null);
+        setProfile(null);
+        setAuthError(
+          "세션을 확인하지 못했어요. 새로고침 후 다시 로그인해 주세요."
+        );
+      } finally {
+        if (mounted) {
+          window.clearTimeout(loadingTimeout);
+          setLoading(false);
+        }
+      }
+    };
+
+    init();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null);
-      setAuthError(null);
-      if (session?.user) {
-        await ensureProfile(session.user);
-      } else {
-        setProfile(null);
+      try {
+        setUser(session?.user ?? null);
+        setAuthError(null);
+        if (session?.user) {
+          await ensureProfile(session.user);
+        } else {
+          setProfile(null);
+        }
+      } catch (error) {
+        setAuthError(
+          "로그인 상태를 업데이트하지 못했어요. 새로고침 후 다시 시도해 주세요."
+        );
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      window.clearTimeout(loadingTimeout);
+      subscription.unsubscribe();
+    };
   }, [supabase, ensureProfile]);
 
   const signInWithLinkedIn = useCallback(

@@ -3,6 +3,8 @@
 import type { Channel } from "./use-lobby";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "./use-lobby";
+import { WindowControls } from "@/components/window-controls";
+import { useWindowFocus } from "@/lib/window-focus-context";
 import { AuthButton } from "./auth-button";
 
 interface ChannelSidebarProps {
@@ -24,10 +26,32 @@ export function ChannelSidebar({
   onSignInWithLinkedIn,
   onSignOut,
 }: ChannelSidebarProps) {
+  const windowFocus = useWindowFocus();
+  const inShell = !!windowFocus;
+
   return (
     <div className="flex flex-col h-full bg-[#1e1f22]">
-      <div className="h-12 px-4 flex items-center border-b border-[#1a1b1e] shadow-[0_1px_0_rgba(0,0,0,0.3)]">
-        <h2 className="text-[15px] font-semibold text-white tracking-tight truncate">
+      <div
+        className="h-12 px-4 flex items-center gap-2 border-b border-[#1a1b1e] shadow-[0_1px_0_rgba(0,0,0,0.3)] select-none relative"
+      >
+        {inShell && (
+          <button
+            type="button"
+            aria-label="Drag window"
+            className="absolute inset-0 cursor-default"
+            onMouseDown={windowFocus?.onDragStart}
+          />
+        )}
+        <WindowControls
+          inShell={inShell}
+          showWhenNotInShell={false}
+          className="p-2 -ml-2 relative z-10"
+          onClose={inShell ? windowFocus?.closeWindow : undefined}
+          onMinimize={inShell ? windowFocus?.minimizeWindow : undefined}
+          onToggleMaximize={inShell ? windowFocus?.toggleMaximize : undefined}
+          isMaximized={windowFocus?.isMaximized ?? false}
+        />
+        <h2 className="text-[15px] font-semibold text-white tracking-tight truncate relative z-10">
           cozac.dev
         </h2>
       </div>

@@ -2,7 +2,7 @@
 
 import type { Channel } from "./use-lobby";
 import type { User } from "@supabase/supabase-js";
-import type { Profile, LobbyOAuthProvider } from "./use-lobby";
+import type { Profile } from "./use-lobby";
 import { AuthButton } from "./auth-button";
 
 interface ChannelSidebarProps {
@@ -11,12 +11,7 @@ interface ChannelSidebarProps {
   onSelectChannel: (id: string) => void;
   user: User | null;
   profile: Profile | null;
-  emailLoginEnabled: boolean;
-  onSignIn: (email: string) => Promise<{ error: string | null }>;
-  onSignInWithProvider: (
-    provider: LobbyOAuthProvider
-  ) => Promise<{ error: string | null }>;
-  onSignInAsGuest: () => Promise<{ error: string | null }>;
+  onSignInWithLinkedIn: () => Promise<{ error: string | null }>;
   onSignOut: () => void;
 }
 
@@ -26,10 +21,7 @@ export function ChannelSidebar({
   onSelectChannel,
   user,
   profile,
-  emailLoginEnabled,
-  onSignIn,
-  onSignInWithProvider,
-  onSignInAsGuest,
+  onSignInWithLinkedIn,
   onSignOut,
 }: ChannelSidebarProps) {
   return (
@@ -63,14 +55,11 @@ export function ChannelSidebar({
         ))}
       </div>
 
-      <div className="h-[52px] px-2 flex items-center bg-[#111214] border-t border-[#1a1b1e]">
+      <div className="px-2 py-2 bg-[#111214] border-t border-[#1a1b1e]">
         <AuthButton
           user={user}
           profile={profile}
-          emailLoginEnabled={emailLoginEnabled}
-          onSignIn={onSignIn}
-          onSignInWithProvider={onSignInWithProvider}
-          onSignInAsGuest={onSignInAsGuest}
+          onSignInWithLinkedIn={onSignInWithLinkedIn}
           onSignOut={onSignOut}
         />
       </div>

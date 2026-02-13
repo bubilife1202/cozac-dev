@@ -8,9 +8,6 @@ interface LobbyActionResult {
   error: string | null;
 }
 
-export type LobbyOAuthProvider = "google" | "linkedin_oidc";
-const EMAIL_LOGIN_ENABLED = process.env.NEXT_PUBLIC_LOBBY_EMAIL_LOGIN === "true";
-
 export interface Profile {
   id: string;
   email: string | null;
@@ -77,22 +74,8 @@ export function useLobby() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
 
-  const mapAuthErrorMessage = useCallback((message: string): string => {
-    if (message.includes("email_address_invalid")) {
-      return "이메일 형식을 다시 확인해 주세요.";
-    }
-    if (message.includes("over_email_send_rate_limit")) {
-      return "로그인 메일 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.";
-    }
-    if (message.includes("Email link is invalid")) {
-      return "로그인 링크가 만료되었어요. 다시 요청해 주세요.";
-    }
-    return "로그인 링크 발송에 실패했어요. 잠시 후 다시 시도해 주세요.";
-  }, []);
-
   const mapOAuthErrorMessage = useCallback(
-    (message: string, provider: LobbyOAuthProvider): string => {
-      const providerLabel = provider === "google" ? "Google" : "LinkedIn";
+    (message: string): string => {
       const lowerMessage = message.toLowerCase();
 
       if (
@@ -101,10 +84,10 @@ export function useLobby() {
         lowerMessage.includes("oauth_provider_not_supported") ||
         lowerMessage.includes("missing oauth")
       ) {
-        return `${providerLabel} 로그인이 아직 설정되지 않았어요. 관리자 설정이 필요해요.`;
+        return "LinkedIn 로그인이 아직 설정되지 않았어요. 관리자 설정이 필요해요.";
       }
 
-      return `${providerLabel} 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.`;
+      return "LinkedIn 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.";
     },
     []
   );
@@ -188,68 +171,17 @@ export function useLobby() {
     return () => subscription.unsubscribe();
   }, [supabase, ensureProfile]);
 
-  const signIn = useCallback(
-    async (email: string): Promise<LobbyActionResult> => {
-      if (!EMAIL_LOGIN_ENABLED) {
-        return {
-          error:
-            "이메일 로그인은 현재 비활성화되어 있어요. Google, LinkedIn 또는 게스트 로그인을 사용해 주세요.",
-        };
-      }
-
-      const normalizedEmail = email.trim().toLowerCase();
-      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-      if (!emailPattern.test(normalizedEmail)) {
-        return { error: "이메일 형식이 올바르지 않아요." };
-      }
-
-      const { error } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: window.location.origin + "/lobby",
-        },
-      });
-
-      if (error) {
-        return { error: mapAuthErrorMessage(error.message) };
-      }
-
-      return { error: null };
-    },
-    [supabase, mapAuthErrorMessage]
-  );
-
-  const signInAsGuest = useCallback(async (): Promise<LobbyActionResult> => {
-    const { error } = await supabase.auth.signInAnonymously();
-
-    if (error) {
-      if (error.message.toLowerCase().includes("provider is disabled")) {
-        return {
-          error:
-            "게스트 로그인이 비활성화되어 있어요. 관리자 설정이 필요해요.",
-        };
-      }
-      return {
-        error: "게스트 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.",
-      };
-    }
-
-    return { error: null };
-  }, [supabase]);
-
-  const signInWithProvider = useCallback(
-    async (provider: LobbyOAuthProvider): Promise<LobbyActionResult> => {
+  const signInWithLinkedIn = useCallback(
+    async (): Promise<LobbyActionResult> => {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: "linkedin_oidc",
         options: {
-          redirectTo: window.location.origin + "/lobby",
+          redirectTo: window.location.origin + "/auth/callback",
         },
       });
 
       if (error) {
-        return { error: mapOAuthErrorMessage(error.message, provider) };
+        return { error: mapOAuthErrorMessage(error.message) };
       }
 
       return { error: null };
@@ -422,10 +354,7 @@ export function useLobby() {
     user,
     profile,
     loading,
-    emailLoginEnabled: EMAIL_LOGIN_ENABLED,
-    signIn,
-    signInWithProvider,
-    signInAsGuest,
+    signInWithLinkedIn,
     signOut,
     channels,
     activeChannel,

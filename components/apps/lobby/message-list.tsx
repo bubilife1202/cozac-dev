@@ -4,6 +4,106 @@ import { useEffect, useRef } from "react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import type { LobbyMessage, Channel } from "./use-lobby";
 
+const COZAC_POST_PREFIX = "[[cozac:post]]";
+
+type CozacPostType = "hiring" | "looking";
+
+interface CozacPost {
+  type: CozacPostType;
+  title: string;
+  subtitle?: string;
+  tags?: string[];
+  location?: string;
+  link?: string;
+  body?: string;
+}
+
+function parsePost(content: string): CozacPost | null {
+  if (!content.startsWith(COZAC_POST_PREFIX)) return null;
+  const json = content.slice(COZAC_POST_PREFIX.length);
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const obj = parsed as Record<string, unknown>;
+    const type = obj.type;
+    const title = obj.title;
+    if ((type !== "hiring" && type !== "looking") || typeof title !== "string") {
+      return null;
+    }
+
+    const tags = Array.isArray(obj.tags)
+      ? obj.tags.filter((t) => typeof t === "string").slice(0, 12)
+      : undefined;
+
+    return {
+      type,
+      title,
+      subtitle: typeof obj.subtitle === "string" ? obj.subtitle : undefined,
+      tags,
+      location: typeof obj.location === "string" ? obj.location : undefined,
+      link: typeof obj.link === "string" ? obj.link : undefined,
+      body: typeof obj.body === "string" ? obj.body : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function PostCard({ post }: { post: CozacPost }) {
+  const badge = post.type === "hiring" ? "구인" : "구직";
+  const badgeColor = post.type === "hiring" ? "bg-[#2dc770]/20 text-[#86efac]" : "bg-[#f59e0b]/20 text-[#fbbf24]";
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-[#1f2125] px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${badgeColor}`}>{badge}</span>
+            {post.location && (
+              <span className="text-[11px] text-[#b5bac1] truncate">{post.location}</span>
+            )}
+          </div>
+          <div className="mt-2 text-[15px] font-semibold text-white break-words">
+            {post.title}
+          </div>
+          {post.subtitle && (
+            <div className="mt-0.5 text-[12px] text-[#b5bac1] break-words">
+              {post.subtitle}
+            </div>
+          )}
+        </div>
+
+        {post.link && (
+          <a
+            href={post.link}
+            target="_blank"
+            rel="noreferrer"
+            className="flex-shrink-0 text-[11px] font-semibold text-[#a5b4fc] hover:text-[#c7d2fe] transition-colors"
+          >
+            링크 열기
+          </a>
+        )}
+      </div>
+
+      {post.tags && post.tags.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {post.tags.map((t) => (
+            <span key={t} className="text-[11px] px-2 py-0.5 rounded bg-white/5 text-[#dbdee1]">
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {post.body && (
+        <div className="mt-2 text-[13px] text-[#dbdee1] whitespace-pre-wrap break-words leading-[1.35rem]">
+          {post.body}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface MessageListProps {
   messages: LobbyMessage[];
   activeChannel: Channel | null;
@@ -67,19 +167,20 @@ export function MessageList({ messages, activeChannel, loading }: MessageListPro
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const messageCount = messages.length;
-  const lastMessageId = messages[messages.length - 1]?.id;
-  const channelId = activeChannel?.id;
-
   useEffect(() => {
+    const scrollKey = messages[messages.length - 1]?.id ?? `empty:${messages.length}`;
+    void scrollKey;
+
     if (wasAtBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messageCount, lastMessageId]);
+  }, [messages]);
 
   useEffect(() => {
+    const channelId = activeChannel?.id ?? "none";
+    void channelId;
     bottomRef.current?.scrollIntoView();
-  }, [channelId]);
+  }, [activeChannel?.id]);
 
   if (loading) {
     return (
@@ -98,13 +199,16 @@ export function MessageList({ messages, activeChannel, loading }: MessageListPro
   }
 
   if (messages.length === 0) {
+    const isDirect = Boolean(activeChannel?.id?.startsWith("dm:"));
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
         <div className="w-16 h-16 rounded-full bg-[#5865f2]/20 flex items-center justify-center mb-4">
           <span className="text-3xl">{activeChannel?.emoji ?? "#"}</span>
         </div>
         <h3 className="text-xl font-bold text-white mb-1">
-          #{activeChannel?.name ?? "channel"}의 시작입니다
+          {isDirect
+            ? `${activeChannel?.name ?? "DM"}의 시작입니다`
+            : `#${activeChannel?.name ?? "channel"}의 시작입니다`}
         </h3>
         {activeChannel?.description && (
           <p className="text-sm text-[#949ba4] max-w-[400px]">
@@ -181,7 +285,11 @@ export function MessageList({ messages, activeChannel, loading }: MessageListPro
                   </div>
                 )}
                 <p className="text-[15px] text-[#dbdee1] leading-[1.375rem] break-words whitespace-pre-wrap">
-                  {msg.content}
+                  {(() => {
+                    const post = parsePost(msg.content);
+                    if (post) return <PostCard post={post} />;
+                    return msg.content;
+                  })()}
                 </p>
               </div>
             </div>

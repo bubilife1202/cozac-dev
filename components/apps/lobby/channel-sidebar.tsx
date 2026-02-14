@@ -11,6 +11,9 @@ interface ChannelSidebarProps {
   channels: Channel[];
   activeChannelId: string | null;
   onSelectChannel: (id: string) => void;
+  dmProfiles?: Profile[];
+  activeDmUserId?: string | null;
+  onSelectDm?: (id: string) => void;
   user: User | null;
   profile: Profile | null;
   onSignInWithLinkedIn: () => Promise<{ error: string | null }>;
@@ -21,6 +24,9 @@ export function ChannelSidebar({
   channels,
   activeChannelId,
   onSelectChannel,
+  dmProfiles = [],
+  activeDmUserId = null,
+  onSelectDm,
   user,
   profile,
   onSignInWithLinkedIn,
@@ -68,7 +74,7 @@ export function ChannelSidebar({
             type="button"
             onClick={() => onSelectChannel(ch.id)}
             className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-sm transition-colors group ${
-              activeChannelId === ch.id
+              activeChannelId === ch.id && !activeDmUserId
                 ? "bg-[#404249] text-white"
                 : "text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]"
             }`}
@@ -77,6 +83,44 @@ export function ChannelSidebar({
             <span className="truncate font-medium">{ch.name}</span>
           </button>
         ))}
+
+        {user && dmProfiles.length > 0 && (
+          <div className="pt-4">
+            <div className="px-2 pb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[#949ba4]">
+                Direct Messages
+              </span>
+            </div>
+            {dmProfiles.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onSelectDm?.(p.id)}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors group ${
+                  activeDmUserId === p.id
+                    ? "bg-[#404249] text-white"
+                    : "text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]"
+                }`}
+              >
+                <span className="w-6 h-6 rounded-full overflow-hidden bg-[#5865f2]/20 flex items-center justify-center text-[11px] font-semibold flex-shrink-0">
+                  {p.avatar_url ? (
+                    <img
+                      src={p.avatar_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="text-white">
+                      {p.display_name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </span>
+                <span className="truncate font-medium">{p.display_name}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="px-2 py-2 bg-[#111214] border-t border-[#1a1b1e]">

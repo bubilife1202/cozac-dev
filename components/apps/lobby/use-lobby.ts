@@ -3,10 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/utils/supabase/client";
 import type { User, RealtimeChannel } from "@supabase/supabase-js";
-
-interface LobbyActionResult {
-  error: string | null;
-}
+import { useAuth } from "@/lib/auth-context";
 
 export interface Profile {
   id: string;
@@ -21,6 +18,7 @@ export interface Channel {
   name: string;
   description: string | null;
   emoji: string | null;
+  sort_order?: number | null;
   created_at: string;
 }
 
@@ -31,6 +29,15 @@ export interface MessageRow {
   content: string;
   created_at: string;
   profiles: Profile | null;
+}
+
+interface DirectMessageRow {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  content: string;
+  created_at: string;
+  sender: Profile | null;
 }
 
 export interface LobbyMessage {
@@ -59,38 +66,47 @@ function mapMessage(row: MessageRow): LobbyMessage {
   };
 }
 
+function mapDirectMessage(row: DirectMessageRow): LobbyMessage {
+  return {
+    id: row.id,
+    channelId: `dm:${row.receiver_id}`,
+    userId: row.sender_id,
+    content: row.content,
+    createdAt: row.created_at,
+    profile: {
+      displayName: row.sender?.display_name ?? "Anonymous",
+      avatarUrl: row.sender?.avatar_url ?? null,
+    },
+  };
+}
+
 export function useLobby() {
   const supabase = useMemo(() => createClient(), []);
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
 
-  const [user, setUser] = useState<User | null>(null);
+  const {
+    user,
+    loading: authLoading,
+    authError: globalAuthError,
+    signInWithLinkedIn,
+    signOut,
+  } = useAuth();
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [activeDmUserId, setActiveDmUserId] = useState<string | null>(null);
+  const [dmProfiles, setDmProfiles] = useState<Profile[]>([]);
   const [messages, setMessages] = useState<LobbyMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dmMessages, setDmMessages] = useState<LobbyMessage[]>([]);
+  const [channelsLoading, setChannelsLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [dmMessagesLoading, setDmMessagesLoading] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [sendingDmMessage, setSendingDmMessage] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
-
-  const mapOAuthErrorMessage = useCallback(
-    (message: string): string => {
-      const lowerMessage = message.toLowerCase();
-
-      if (
-        lowerMessage.includes("provider is not enabled") ||
-        lowerMessage.includes("unsupported provider") ||
-        lowerMessage.includes("oauth_provider_not_supported") ||
-        lowerMessage.includes("missing oauth")
-      ) {
-        return "LinkedIn 로그인이 아직 설정되지 않았어요. 관리자 설정이 필요해요.";
-      }
-
-      return "LinkedIn 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.";
-    },
-    []
-  );
+  const [dmSendError, setDmSendError] = useState<string | null>(null);
 
   const ensureProfile = useCallback(
     async (currentUser: User): Promise<Profile | null> => {
@@ -101,7 +117,7 @@ export function useLobby() {
         .maybeSingle();
 
       if (existingError) {
-        setAuthError("프로필 정보를 불러오지 못했어요.");
+        setProfileError("프로필 정보를 불러오지 못했어요.");
         return null;
       }
 
@@ -136,7 +152,7 @@ export function useLobby() {
         .single();
 
       if (insertError) {
-        setAuthError("로그인은 되었지만 프로필 생성에 실패했어요.");
+        setProfileError("로그인은 되었지만 프로필 생성에 실패했어요.");
         return null;
       }
 
@@ -147,125 +163,55 @@ export function useLobby() {
   );
 
   useEffect(() => {
-    let mounted = true;
+    if (!user) {
+      setProfile(null);
+      setProfileError(null);
+      setDmProfiles([]);
+      setActiveDmUserId(null);
+      setDmMessages([]);
+      setDmSendError(null);
+      return;
+    }
 
-    const loadingTimeout = window.setTimeout(() => {
-      if (!mounted) return;
-      setAuthError(
-        "세션 초기화가 지연되고 있어요. 새로고침 후 다시 로그인해 주세요."
-      );
-      setLoading(false);
-    }, 10000);
-
-    const init = async () => {
-      try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession();
-
-        if (!mounted) return;
-
-        if (error) {
-          setUser(null);
-          setProfile(null);
-          setAuthError(
-            "세션을 확인하지 못했어요. 새로고침 후 다시 로그인해 주세요."
-          );
-          setLoading(false);
-          return;
-        }
-
-        setUser(session?.user ?? null);
-        setAuthError(null);
-
-        setLoading(false);
-
-        if (session?.user) {
-          ensureProfile(session.user).catch(() => {
-            if (!mounted) return;
-            setAuthError("프로필 정보를 불러오지 못했어요.");
-          });
-        }
-      } catch (error) {
-        if (!mounted) return;
-        setUser(null);
-        setProfile(null);
-        setAuthError(
-          "세션을 확인하지 못했어요. 새로고침 후 다시 로그인해 주세요."
-        );
-        setLoading(false);
-      } finally {
-        if (mounted) {
-          window.clearTimeout(loadingTimeout);
-        }
-      }
-    };
-
-    init();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        setUser(session?.user ?? null);
-        setAuthError(null);
-        if (session?.user) {
-          ensureProfile(session.user).catch(() => {
-            if (!mounted) return;
-            setAuthError("프로필 정보를 불러오지 못했어요.");
-          });
-        } else {
-          setProfile(null);
-        }
-      } catch (error) {
-        setAuthError(
-          "로그인 상태를 업데이트하지 못했어요. 새로고침 후 다시 시도해 주세요."
-        );
-      }
+    ensureProfile(user).catch(() => {
+      setProfileError("프로필 정보를 불러오지 못했어요.");
     });
+  }, [user, ensureProfile]);
 
-    return () => {
-      mounted = false;
-      window.clearTimeout(loadingTimeout);
-      subscription.unsubscribe();
-    };
-  }, [supabase, ensureProfile]);
+  useEffect(() => {
+    if (!user) return;
 
-  const signInWithLinkedIn = useCallback(
-    async (): Promise<LobbyActionResult> => {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "linkedin_oidc",
-        options: {
-          redirectTo: window.location.origin + "/auth/callback",
-        },
-      });
+    const fetchDmProfiles = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .neq("id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(25);
 
-      if (error) {
-        return { error: mapOAuthErrorMessage(error.message) };
+      if (data) {
+        setDmProfiles(data as Profile[]);
       }
+    };
 
-      return { error: null };
-    },
-    [supabase, mapOAuthErrorMessage]
-  );
-
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-  }, [supabase]);
+    fetchDmProfiles();
+  }, [supabase, user]);
 
   useEffect(() => {
     const fetchChannels = async () => {
-      const { data, error } = await supabase
-        .from("channels")
-        .select("*")
-        .order("created_at", { ascending: true });
+      try {
+        const { data, error } = await supabase
+          .from("channels")
+          .select("*")
+          .order("sort_order", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true });
 
-      if (!error && data) {
-        setChannels(data as Channel[]);
-        setActiveChannelId((prev) => prev ?? data[0]?.id ?? null);
+        if (!error && data) {
+          setChannels(data as Channel[]);
+          setActiveChannelId((prev) => prev ?? data[0]?.id ?? null);
+        }
+      } finally {
+        setChannelsLoading(false);
       }
     };
 
@@ -274,6 +220,7 @@ export function useLobby() {
 
   useEffect(() => {
     if (!activeChannelId) return;
+    if (activeDmUserId) return;
 
     let cancelled = false;
 
@@ -300,10 +247,49 @@ export function useLobby() {
     return () => {
       cancelled = true;
     };
-  }, [activeChannelId, supabase]);
+  }, [activeChannelId, activeDmUserId, supabase]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeDmUserId) return;
+
+    let cancelled = false;
+
+    const fetchDmMessages = async () => {
+      setDmMessagesLoading(true);
+      const other = activeDmUserId;
+      const { data, error } = await supabase
+        .from("direct_messages")
+        .select("*, sender:profiles!direct_messages_sender_id_fkey(display_name, avatar_url)")
+        .or(
+          `and(sender_id.eq.${user.id},receiver_id.eq.${other}),and(sender_id.eq.${other},receiver_id.eq.${user.id})`
+        )
+        .order("created_at", { ascending: true });
+
+      if (!cancelled) {
+        if (!error && data) {
+          setDmMessages((data as DirectMessageRow[]).map(mapDirectMessage));
+        } else {
+          setDmMessages([]);
+        }
+        setDmMessagesLoading(false);
+      }
+    };
+
+    fetchDmMessages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDmUserId, supabase, user]);
+
+  useEffect(() => {
+    if (!user) {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
+      return;
+    }
 
     if (realtimeChannelRef.current) {
       supabase.removeChannel(realtimeChannelRef.current);
@@ -318,7 +304,7 @@ export function useLobby() {
       } = await supabase.auth.getSession();
 
       if (session?.access_token) {
-        await supabase.realtime.setAuth(session.access_token);
+        supabase.realtime.setAuth(session.access_token);
       }
 
       const channel = supabase
@@ -363,6 +349,96 @@ export function useLobby() {
             });
           }
         )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "direct_messages",
+            filter: `receiver_id=eq.${user.id}`,
+          },
+          async (payload) => {
+            const newRow = payload.new as {
+              id: string;
+              sender_id: string;
+              receiver_id: string;
+              content: string;
+              created_at: string;
+            };
+
+            const { data: senderProfile } = await supabase
+              .from("profiles")
+              .select("display_name, avatar_url")
+              .eq("id", newRow.sender_id)
+              .maybeSingle();
+
+            const newMessage: LobbyMessage = {
+              id: newRow.id,
+              channelId: `dm:${newRow.receiver_id}`,
+              userId: newRow.sender_id,
+              content: newRow.content,
+              createdAt: newRow.created_at,
+              profile: {
+                displayName: senderProfile?.display_name ?? "Anonymous",
+                avatarUrl: senderProfile?.avatar_url ?? null,
+              },
+            };
+
+            setDmMessages((prev) => {
+              if (prev.some((m) => m.id === newMessage.id)) return prev;
+              if (!activeDmUserId) return prev;
+              if (
+                newRow.sender_id !== activeDmUserId &&
+                newRow.receiver_id !== activeDmUserId
+              ) {
+                return prev;
+              }
+              return [...prev, newMessage];
+            });
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "direct_messages",
+            filter: `sender_id=eq.${user.id}`,
+          },
+          async (payload) => {
+            const newRow = payload.new as {
+              id: string;
+              sender_id: string;
+              receiver_id: string;
+              content: string;
+              created_at: string;
+            };
+
+            const newMessage: LobbyMessage = {
+              id: newRow.id,
+              channelId: `dm:${newRow.receiver_id}`,
+              userId: newRow.sender_id,
+              content: newRow.content,
+              createdAt: newRow.created_at,
+              profile: {
+                displayName: profile?.display_name ?? "Anonymous",
+                avatarUrl: profile?.avatar_url ?? null,
+              },
+            };
+
+            setDmMessages((prev) => {
+              if (prev.some((m) => m.id === newMessage.id)) return prev;
+              if (!activeDmUserId) return prev;
+              if (
+                newRow.sender_id !== activeDmUserId &&
+                newRow.receiver_id !== activeDmUserId
+              ) {
+                return prev;
+              }
+              return [...prev, newMessage];
+            });
+          }
+        )
         .subscribe();
 
       if (mounted) {
@@ -381,11 +457,12 @@ export function useLobby() {
         realtimeChannelRef.current = null;
       }
     };
-  }, [supabase, user]);
+  }, [supabase, user, activeDmUserId, profile?.display_name, profile?.avatar_url]);
 
   const sendMessage = useCallback(
     async (content: string) => {
       if (!user || !profile || !activeChannelId || !content.trim() || sendingMessage) return;
+      if (activeDmUserId) return;
 
       setSendingMessage(true);
       setSendError(null);
@@ -402,30 +479,68 @@ export function useLobby() {
 
       setSendingMessage(false);
     },
-    [user, profile, activeChannelId, sendingMessage, supabase]
+    [user, profile, activeChannelId, activeDmUserId, sendingMessage, supabase]
+  );
+
+  const sendDirectMessage = useCallback(
+    async (content: string) => {
+      if (!user || !profile || !activeDmUserId || !content.trim() || sendingDmMessage) return;
+
+      setSendingDmMessage(true);
+      setDmSendError(null);
+
+      const { error } = await supabase.from("direct_messages").insert({
+        sender_id: user.id,
+        receiver_id: activeDmUserId,
+        content: content.trim(),
+      });
+
+      if (error) {
+        setDmSendError("DM 전송에 실패했어요. 다시 시도해 주세요.");
+      }
+
+      setSendingDmMessage(false);
+    },
+    [user, profile, activeDmUserId, sendingDmMessage, supabase]
   );
 
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null;
+  const activeDmProfile =
+    activeDmUserId
+      ? dmProfiles.find((p) => p.id === activeDmUserId) ?? null
+      : null;
 
-  const channelMessages = messages.filter(
-    (m) => m.channelId === activeChannelId
-  );
+  const activeRoom: Channel | null = activeDmProfile
+    ? {
+        id: `dm:${activeDmProfile.id}`,
+        name: `@${activeDmProfile.display_name}`,
+        description: activeDmProfile.email,
+        emoji: "💬",
+        created_at: activeDmProfile.created_at,
+      }
+    : activeChannel;
+
+  const channelMessages = messages.filter((m) => m.channelId === activeChannelId);
 
   return {
     user,
     profile,
-    loading,
-    signInWithLinkedIn,
+    loading: channelsLoading || authLoading,
+    signInWithLinkedIn: () => signInWithLinkedIn({ nextPath: "/lobby" }),
     signOut,
     channels,
-    activeChannel,
+    activeChannel: activeRoom,
     activeChannelId,
     setActiveChannelId,
+    dmProfiles,
+    activeDmUserId,
+    setActiveDmUserId,
     channelMessages,
-    messagesLoading,
-    sendMessage,
-    sendingMessage,
-    authError,
-    sendError,
+    messagesLoading: activeDmUserId ? dmMessagesLoading : messagesLoading,
+    sendMessage: activeDmUserId ? sendDirectMessage : sendMessage,
+    sendingMessage: activeDmUserId ? sendingDmMessage : sendingMessage,
+    authError: profileError ?? globalAuthError,
+    sendError: activeDmUserId ? dmSendError : sendError,
+    dmMessages,
   };
 }

@@ -18,10 +18,14 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
     signInWithLinkedIn,
     signOut,
     channels,
+    dmProfiles,
     activeChannel,
     activeChannelId,
     setActiveChannelId,
+    activeDmUserId,
+    setActiveDmUserId,
     channelMessages,
+    dmMessages,
     messagesLoading,
     sendMessage,
     sendingMessage,
@@ -33,12 +37,23 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
 
   const handleSelectChannel = useCallback(
     (id: string) => {
+      setActiveDmUserId(null);
       setActiveChannelId(id);
       if (isMobile) {
         setShowChannelList(false);
       }
     },
-    [isMobile, setActiveChannelId]
+    [isMobile, setActiveChannelId, setActiveDmUserId]
+  );
+
+  const handleSelectDm = useCallback(
+    (id: string) => {
+      setActiveDmUserId(id);
+      if (isMobile) {
+        setShowChannelList(false);
+      }
+    },
+    [isMobile, setActiveDmUserId]
   );
 
   const handleBack = useCallback(() => {
@@ -69,6 +84,9 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
             channels={channels}
             activeChannelId={activeChannelId}
             onSelectChannel={handleSelectChannel}
+            dmProfiles={dmProfiles}
+            activeDmUserId={activeDmUserId}
+            onSelectDm={handleSelectDm}
             user={user}
             profile={profile}
             onSignInWithLinkedIn={signInWithLinkedIn}
@@ -92,21 +110,22 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
                 {activeChannel?.name}
               </span>
             </div>
-            <MessageList
-              messages={channelMessages}
-              activeChannel={activeChannel}
-              loading={messagesLoading}
-            />
+              <MessageList
+                messages={activeDmUserId ? dmMessages : channelMessages}
+                activeChannel={activeChannel}
+                loading={messagesLoading}
+              />
             {authError && (
               <div className="px-4 pb-1 text-xs text-[#ff8e8e]">{authError}</div>
             )}
-            <MessageInput
-              user={user}
-              onSend={sendMessage}
-              sending={sendingMessage}
-              channelName={activeChannel?.name ?? ""}
-              sendError={sendError}
-            />
+              <MessageInput
+                user={user}
+                onSend={sendMessage}
+                sending={sendingMessage}
+                channelName={activeChannel?.name ?? ""}
+                channelType={activeDmUserId ? "dm" : activeChannel?.name ?? ""}
+                sendError={sendError}
+              />
           </>
         )}
       </div>
@@ -120,6 +139,9 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
           channels={channels}
           activeChannelId={activeChannelId}
           onSelectChannel={handleSelectChannel}
+          dmProfiles={dmProfiles}
+          activeDmUserId={activeDmUserId}
+          onSelectDm={handleSelectDm}
           user={user}
           profile={profile}
           onSignInWithLinkedIn={signInWithLinkedIn}
@@ -144,7 +166,7 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
         </div>
 
         <MessageList
-          messages={channelMessages}
+          messages={activeDmUserId ? dmMessages : channelMessages}
           activeChannel={activeChannel}
           loading={messagesLoading}
         />
@@ -158,6 +180,7 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
           onSend={sendMessage}
           sending={sendingMessage}
           channelName={activeChannel?.name ?? ""}
+          channelType={activeDmUserId ? "dm" : activeChannel?.name ?? ""}
           sendError={sendError}
         />
       </div>

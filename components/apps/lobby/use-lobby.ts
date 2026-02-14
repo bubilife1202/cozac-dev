@@ -97,6 +97,7 @@ export function useLobby() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [activeDmUserId, setActiveDmUserId] = useState<string | null>(null);
   const [dmProfiles, setDmProfiles] = useState<Profile[]>([]);
+  const [dmAvailable, setDmAvailable] = useState(false);
   const [messages, setMessages] = useState<LobbyMessage[]>([]);
   const [dmMessages, setDmMessages] = useState<LobbyMessage[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(true);
@@ -170,6 +171,7 @@ export function useLobby() {
       setActiveDmUserId(null);
       setDmMessages([]);
       setDmSendError(null);
+      setDmAvailable(false);
       return;
     }
 
@@ -180,6 +182,25 @@ export function useLobby() {
 
   useEffect(() => {
     if (!user) return;
+
+    const checkDmAvailability = async () => {
+      const { error } = await supabase.from("direct_messages").select("id").limit(1);
+
+      if (error && error.code === "PGRST205") {
+        setDmAvailable(false);
+        setDmProfiles([]);
+        setActiveDmUserId(null);
+        return;
+      }
+
+      setDmAvailable(true);
+    };
+
+    checkDmAvailability();
+  }, [supabase, user]);
+
+  useEffect(() => {
+    if (!user || !dmAvailable) return;
 
     const fetchDmProfiles = async () => {
       const { data } = await supabase
@@ -195,20 +216,33 @@ export function useLobby() {
     };
 
     fetchDmProfiles();
-  }, [supabase, user]);
+  }, [supabase, user, dmAvailable]);
 
   useEffect(() => {
     const fetchChannels = async () => {
       try {
-        const { data, error } = await supabase
+        const ordered = await supabase
           .from("channels")
           .select("*")
           .order("sort_order", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: true });
 
-        if (!error && data) {
-          setChannels(data as Channel[]);
-          setActiveChannelId((prev) => prev ?? data[0]?.id ?? null);
+        if (ordered.error && ordered.error.code === "42703") {
+          const fallback = await supabase
+            .from("channels")
+            .select("*")
+            .order("created_at", { ascending: true });
+
+          if (!fallback.error && fallback.data) {
+            setChannels(fallback.data as Channel[]);
+            setActiveChannelId((prev) => prev ?? fallback.data[0]?.id ?? null);
+          }
+          return;
+        }
+
+        if (!ordered.error && ordered.data) {
+          setChannels(ordered.data as Channel[]);
+          setActiveChannelId((prev) => prev ?? ordered.data[0]?.id ?? null);
         }
       } finally {
         setChannelsLoading(false);
@@ -307,7 +341,7 @@ export function useLobby() {
         supabase.realtime.setAuth(session.access_token);
       }
 
-      const channel = supabase
+      let channel = supabase
         .channel(`lobby-messages-${user.id}`)
         .on(
           "postgres_changes",
@@ -349,7 +383,9 @@ export function useLobby() {
             });
           }
         )
-        .on(
+
+      if (dmAvailable) {
+        channel = channel.on(
           "postgres_changes",
           {
             event: "INSERT",
@@ -396,8 +432,9 @@ export function useLobby() {
               return [...prev, newMessage];
             });
           }
-        )
-        .on(
+        );
+
+        channel = channel.on(
           "postgres_changes",
           {
             event: "INSERT",
@@ -438,8 +475,10 @@ export function useLobby() {
               return [...prev, newMessage];
             });
           }
-        )
-        .subscribe();
+        );
+      }
+
+      channel = channel.subscribe();
 
       if (mounted) {
         realtimeChannelRef.current = channel;
@@ -457,7 +496,7 @@ export function useLobby() {
         realtimeChannelRef.current = null;
       }
     };
-  }, [supabase, user, activeDmUserId, profile?.display_name, profile?.avatar_url]);
+  }, [supabase, user, activeDmUserId, dmAvailable, profile?.display_name, profile?.avatar_url]);
 
   const sendMessage = useCallback(
     async (content: string) => {

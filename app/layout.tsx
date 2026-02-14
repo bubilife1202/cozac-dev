@@ -4,6 +4,7 @@ import { siteConfig } from "@/config/site";
 import "./globals.css";
 import { SystemSettingsProvider } from "@/lib/system-settings-context";
 import { AudioProvider } from "@/lib/music/audio-context";
+import { AuthProvider } from "@/lib/auth-context";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -83,9 +84,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <SystemSettingsProvider>
-            <AudioProvider>
-              {children}
-            </AudioProvider>
+            <AuthProvider>
+              <AudioProvider>{children}</AudioProvider>
+            </AuthProvider>
           </SystemSettingsProvider>
         </ThemeProvider>
       </body>

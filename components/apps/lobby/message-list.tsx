@@ -284,13 +284,15 @@ export function MessageList({ messages, activeChannel, loading }: MessageListPro
                     </span>
                   </div>
                 )}
-                <p className="text-[15px] text-[#dbdee1] leading-[1.375rem] break-words whitespace-pre-wrap">
-                  {(() => {
-                    const post = parsePost(msg.content);
-                    if (post) return <PostCard post={post} />;
-                    return msg.content;
-                  })()}
-                </p>
+                {(() => {
+                  const post = parsePost(msg.content);
+                  if (post) return <PostCard post={post} />;
+                  return (
+                    <p className="text-[15px] text-[#dbdee1] leading-[1.375rem] break-words whitespace-pre-wrap">
+                      {msg.content}
+                    </p>
+                  );
+                })()}
               </div>
             </div>
           </div>

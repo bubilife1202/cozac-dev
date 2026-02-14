@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect, useRef, useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { WindowManagerProvider, useWindowManager, DESKTOP_DEFAULT_FOCUSED_APP, getAppIdFromWindowId } from "@/lib/window-context";
 import { useSystemSettings } from "@/lib/system-settings-context";
@@ -26,11 +26,17 @@ import { LockScreen } from "./lock-screen";
 import { SleepOverlay } from "./sleep-overlay";
 import { ShutdownOverlay } from "./shutdown-overlay";
 import { RestartOverlay } from "./restart-overlay";
+import { BootSequence } from "./boot-sequence";
 import { getWallpaperPath } from "@/lib/os-versions";
 import type { SettingsPanel, SettingsCategory } from "@/components/apps/settings/settings-app";
 import { getTextEditContent, saveTextEditContent, cacheTextEditContent } from "@/lib/file-storage";
+import { useAuth } from "@/lib/auth-context";
 
 type DesktopMode = "active" | "locked" | "sleeping" | "shuttingDown" | "restarting";
+
+type StartupPhase = "boot" | "auth" | "ready";
+
+const BOOT_SEEN_KEY = "cozac.boot.seen.v1";
 
 interface DesktopProps {
   initialAppId?: string;
@@ -132,13 +138,13 @@ function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFi
     moveMultiWindow,
     resizeMultiWindow,
     toggleMaximizeMultiWindow,
-    bringAppToFront,
     updateWindowMetadata,
     getWindowsByApp,
   } = useWindowManager();
   const { focusMode, currentOS } = useSystemSettings();
   const { touchRecent } = useRecents();
   const isMobile = useMobileDetect();
+  const { user, loading: authLoading } = useAuth();
 
   // Debounce touchRecent to avoid excessive re-renders
   const touchTimers = useRef<Record<string, NodeJS.Timeout>>({});
@@ -156,10 +162,12 @@ function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFi
     return () => Object.values(timers).forEach(clearTimeout);
   }, []);
   const [mode, setMode] = useState<DesktopMode>("active");
+  const [startupPhase, setStartupPhase] = useState<StartupPhase>("auth");
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel | undefined>(undefined);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory | undefined>(undefined);
   const [restoreDefaultOnUnlock, setRestoreDefaultOnUnlock] = useState(false);
   const [finderTab, setFinderTab] = useState<FinderTab | undefined>(undefined);
+  const openedLobbyOnEntryRef = useRef(false);
   // Get TextEdit and Preview windows from window manager
   const textEditWindows = getWindowsByApp("textedit");
   const previewWindows = getWindowsByApp("preview");
@@ -473,6 +481,40 @@ function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFi
     }
   }, [restoreDefaultOnUnlock, restoreDesktopDefault, initialNoteSlug]);
 
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const seenBoot = window.localStorage.getItem(BOOT_SEEN_KEY) === "1";
+    setStartupPhase(seenBoot ? "auth" : "boot");
+  }, []);
+
+  useEffect(() => {
+    if (startupPhase !== "auth") return;
+    if (authLoading) return;
+
+    if (user) {
+      setMode("active");
+      setStartupPhase("ready");
+      return;
+    }
+
+    setRestoreDefaultOnUnlock(true);
+    setMode("locked");
+    setStartupPhase("ready");
+  }, [startupPhase, authLoading, user]);
+
+  useEffect(() => {
+    if (startupPhase !== "ready") return;
+    if (!user) return;
+    if (openedLobbyOnEntryRef.current) return;
+    if (typeof window === "undefined") return;
+    if (window.location.pathname !== "/") return;
+
+    openedLobbyOnEntryRef.current = true;
+    openWindow("lobby");
+    focusWindow("lobby");
+    window.history.replaceState(null, "", "/lobby");
+  }, [startupPhase, user, openWindow, focusWindow]);
+
   return (
     <div className="fixed inset-0">
       <Image
@@ -603,6 +645,37 @@ function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFi
             onFinderClick={handleFinderDockClick}
           />
         </>
+      )}
+
+      {startupPhase === "boot" && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black">
+          <BootSequence
+            subtitle="starting community"
+            onComplete={() => {
+              try {
+                window.localStorage.setItem(BOOT_SEEN_KEY, "1");
+              } catch (error) {
+                void error;
+              }
+              setStartupPhase("auth");
+            }}
+          />
+        </div>
+      )}
+
+      {startupPhase === "auth" && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="flex gap-1.5" role="status" aria-live="polite">
+            <span className="sr-only">Initializing session</span>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-2.5 h-2.5 rounded-full bg-white/80 animate-bounce"
+                style={{ animationDelay: `${i * 150}ms` }}
+              />
+            ))}
+          </div>
+        </div>
       )}
 
       {mode === "locked" && <LockScreen onUnlock={handleUnlock} />}

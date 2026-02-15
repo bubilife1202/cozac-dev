@@ -35,6 +35,7 @@ const labels = {
       <Pin className="inline-block w-4 h-4 mr-1" /> Pinned
     </>
   ),
+  portfolio: "Portfolio",
   today: "Today",
   yesterday: "Yesterday",
   "7": "Previous 7 Days",
@@ -42,7 +43,7 @@ const labels = {
   older: "Older",
 };
 
-const categoryOrder = ["pinned", "today", "yesterday", "7", "30", "older"];
+const categoryOrder = ["pinned", "portfolio", "today", "yesterday", "7", "30", "older"];
 
 export default function Sidebar({
   notes: publicNotes,
@@ -149,6 +150,8 @@ export default function Sidebar({
             (note) =>
               note.slug === "about-me" ||
               note.slug === "quick-links" ||
+              note.slug === "experience" ||
+              note.slug === "projects" ||
               note.session_id === sessionId
           )
           .map((note) => note.slug)

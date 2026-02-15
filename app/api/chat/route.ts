@@ -83,6 +83,23 @@ export async function POST(req: Request) {
       );
     }
 
+    const braintrustApiKey = process.env.BRAINTRUST_API_KEY;
+    if (!braintrustApiKey || braintrustApiKey.trim().length === 0) {
+      return new Response(
+        JSON.stringify({
+          actions: [
+            {
+              action: "respond",
+              participant: recipients[0].name,
+              message:
+                "지금은 챗봇이 비활성화되어 있어요. 연락이 필요하면 Lobby에서 메시지를 남겨주세요.",
+            },
+          ],
+        }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const messages = (Array.isArray(messagesRaw) ? messagesRaw : []).filter(
       isMessageLike
     );
@@ -182,7 +199,12 @@ ${conversation || "(no messages yet)"}
 STATE:
 - Last human message: "${state.lastHumanMessage || "(none)"}" (${state.lastHumanTime || "n/a"})
 
-Respond naturally. Keep it SHORT like a real text message (1-2 sentences, not paragraphs).`;
+Respond naturally.
+
+Guidelines:
+- Default to Korean unless the user writes in English.
+- Be concise but useful (2-8 sentences). Use bullet points when helpful.
+- If the user asks for details, you may point them to /notes/experience or /notes/projects.`;
 }
 
 function buildGroupPrompt(
@@ -266,7 +288,7 @@ function buildOneOnOneTools(recipientName: string) {
             },
             message: {
               type: "string",
-              description: "Keep it SHORT (1-2 sentences). Casual like friends texting.",
+              description: "Keep it concise but helpful. Use bullets when it improves clarity.",
             },
           },
           required: ["participant", "message"],

@@ -208,23 +208,22 @@ export function ContactDrawer({
                 </Fragment>
               ))}
               
-              {/* Add Contact Button */}
-              <div className="py-4 border-t">
-                <button 
-                  className="w-full flex items-center gap-3 text-blue-500 hover:bg-transparent hover:text-blue-600 justify-start"
-                  onClick={() => {
-                    setOpen(false);
-                    if (onAddContact) {
+              {onAddContact && (
+                <div className="py-4 border-t">
+                  <button
+                    className="w-full flex items-center gap-3 text-blue-500 hover:bg-transparent hover:text-blue-600 justify-start"
+                    onClick={() => {
+                      setOpen(false);
                       onAddContact();
-                    }
-                  }}
-                >
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                    <span className="text-2xl text-blue-500">+</span>
-                  </div>
-                  <span className="font-medium text-base">Add Contact</span>
-                </button>
-              </div>
+                    }}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                      <span className="text-2xl text-blue-500">+</span>
+                    </div>
+                    <span className="font-medium text-base">Add Contact</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Hide Alerts Toggle */}

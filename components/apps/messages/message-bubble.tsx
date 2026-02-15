@@ -430,7 +430,7 @@ export function MessageBubble({
                           !isMe ? "inset-[-17px]" : "inset-[-22px]"
                         )}
                       />
-                      <div className="text-[14px] flex items-center">
+                      <div className="text-[14px] flex items-center min-w-0 whitespace-pre-wrap break-words">
                         {prepareContent(
                           message.content,
                           conversation?.recipients || [],

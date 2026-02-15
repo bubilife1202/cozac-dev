@@ -332,6 +332,12 @@ export function ChatHeader({
   const [isEditMode, setIsEditMode] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
 
+  const isPortfolioChat = Boolean(
+    !isNewChat &&
+      activeConversation?.recipients?.length === 1 &&
+      activeConversation.recipients[0]?.name === "cozac"
+  );
+
   const saveAndExitHeaderEditMode = useCallback(() => {
     const currentRecipients = recipientInput
       .split(",")
@@ -477,6 +483,10 @@ export function ChatHeader({
     const isPillRemoveClick = (e.target as Element).closest('button[aria-label^="Remove"]');
     if (isDropdownClick || isPillRemoveClick) {
       e.stopPropagation();
+      return;
+    }
+
+    if (isPortfolioChat) {
       return;
     }
 
@@ -767,9 +777,13 @@ export function ChatHeader({
                         }
                         onUpdateName={onUpdateConversationName}
                         conversationName={activeConversation.name}
-                        onAddContact={() => {
-                          setIsEditMode(true);
-                        }}
+                        onAddContact={
+                          isPortfolioChat
+                            ? undefined
+                            : () => {
+                                setIsEditMode(true);
+                              }
+                        }
                         onHideAlertsChange={onHideAlertsChange}
                         hideAlerts={activeConversation.hideAlerts}
                       />

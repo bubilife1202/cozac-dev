@@ -18,6 +18,18 @@ interface AppProps {
   focusModeActive?: boolean; // When true, mute all notifications and sounds
 }
 
+function cloneConversations(conversations: Conversation[]): Conversation[] {
+  return conversations.map((conv) => ({
+    ...conv,
+    recipients: conv.recipients.map((r) => ({ ...r })),
+    messages: conv.messages.map((m) => ({
+      ...m,
+      reactions: m.reactions ? m.reactions.map((r) => ({ ...r })) : undefined,
+      mentions: m.mentions ? m.mentions.map((mention) => ({ ...mention })) : undefined,
+    })),
+  }));
+}
+
 export default function App({ isDesktop = false, inShell = false, focusModeActive = false }: AppProps) {
   // Helper to conditionally update URL (skip in desktop mode or shell mode)
   const updateUrl = useCallback(
@@ -62,8 +74,8 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
   useEffect(() => {
     focusModeRef.current = focusModeActive;
   }, [focusModeActive]);
-  const STORAGE_KEY = "dialogueConversations";
-  const DELETED_INITIAL_KEY = "dialogueDeletedInitialConversations";
+  const STORAGE_KEY = "cozac.messages.conversations.v1";
+  const DELETED_INITIAL_KEY = "cozac.messages.deletedInitialConversations.v1";
 
   // Memoized conversation selection method
   const selectConversation = useCallback(
@@ -104,6 +116,32 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
     },
     [conversations, setActiveConversation, setIsNewConversation, updateUrl]
   ); // Only recreate when these dependencies change
+
+  const resetChat = useCallback(() => {
+    const fresh = cloneConversations(initialConversations);
+    const nextActiveId = fresh[0]?.id ?? null;
+
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(DELETED_INITIAL_KEY);
+    } catch (error) {
+      void error;
+    }
+
+    setConversations(fresh);
+    setIsNewConversation(false);
+    setRecipientInput("");
+    setMessageDrafts({});
+    setSearchTerm("");
+    setActiveConversation(nextActiveId);
+
+    if (nextActiveId) {
+      saveMessagesConversation(nextActiveId);
+      updateUrl(`?id=${nextActiveId}`);
+    } else {
+      updateUrl("/messages");
+    }
+  }, [updateUrl, STORAGE_KEY, DELETED_INITIAL_KEY]);
 
   // Effects
   // Ensure active conversation remains valid
@@ -193,7 +231,7 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
     }
 
     // Start with initial conversations, excluding deleted ones
-    let allConversations = initialConversations.filter(
+    let allConversations = cloneConversations(initialConversations).filter(
       (conv) => !deletedInitialIds.has(conv.id)
     );
 
@@ -253,10 +291,14 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
       }
     }
 
-    // If mobile view, show the sidebar
     if (isMobileView) {
-      updateUrl("/messages");
-      setActiveConversation(null);
+      if (allConversations.length === 1) {
+        setActiveConversation(allConversations[0].id);
+        updateUrl(`?id=${allConversations[0].id}`);
+      } else {
+        updateUrl("/messages");
+        setActiveConversation(null);
+      }
       return;
     }
 
@@ -746,9 +788,7 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
 
     fileMenu.registerMessagesActions({
       onNewChat: () => {
-        setIsNewConversation(true);
-        setActiveConversation(null);
-        updateUrl("/messages");
+        resetChat();
       },
       onPinChat: () => {
         const { activeConversation, conversations, handleUpdateConversation } = fileMenuStateRef.current;
@@ -783,7 +823,7 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
     return () => {
       fileMenu.unregisterMessagesActions();
     };
-  }, [fileMenu, updateUrl]);
+  }, [fileMenu, resetChat]);
 
   // Update file menu state when active conversation changes
   useEffect(() => {
@@ -955,12 +995,7 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
               onSoundToggle={handleSoundToggle}
             >
               <Nav
-                onNewChat={() => {
-                  setIsNewConversation(true);
-                  selectConversation(null);
-                  setRecipientInput("");
-                  handleMessageDraftChange("new", "");
-                }}
+                onResetChat={resetChat}
                 isMobileView={isMobileView}
                 isScrolled={isScrolled}
                 isDesktop={isDesktop}

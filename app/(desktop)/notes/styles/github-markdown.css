@@ -136,9 +136,15 @@
 
 .markdown-body code {
   background-color: #f6f8fa;
+  color: #24292f;
   border-radius: 3px;
   padding: 0.2em 0.4em;
   font-size: 85%;
+}
+
+.dark .markdown-body code {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #c9d1d9;
 }
 
 .markdown-body pre {
@@ -146,6 +152,14 @@
   padding: 16px;
   overflow: auto;
   border-radius: 3px;
+}
+
+.dark .markdown-body pre {
+  background-color: #161b22;
+}
+
+.dark .markdown-body pre code {
+  background-color: transparent;
 }
 
 .markdown-body table {

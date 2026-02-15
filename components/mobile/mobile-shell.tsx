@@ -495,7 +495,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
         >
           <IOSStatusBar variant={isOnHomeScreen ? "light" : "dark"} />
           <IOSHomeScreen onAppOpen={handleAppOpen} />
-          <IOSHomeIndicator variant="light" />
+          {isOnHomeScreen && <IOSHomeIndicator variant="light" />}
         </div>
 
         {isAppVisible && (
@@ -574,7 +574,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
               )}
             </div>
             <IOSHomeIndicator
-              variant="dark"
+              variant={renderedApp === "lobby" ? "light" : "dark"}
               onGoHome={handleGoHome}
               position="inline"
             />

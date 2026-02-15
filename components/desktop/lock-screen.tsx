@@ -12,12 +12,10 @@ interface LockScreenProps {
 
 export function LockScreen({ onUnlock }: LockScreenProps) {
   const { currentOS } = useSystemSettings();
-  const { user, loading: authLoading, authError, signInWithLinkedIn } = useAuth();
+  const { user } = useAuth();
   const [currentTime, setCurrentTime] = useState<string>("");
   const [currentDate, setCurrentDate] = useState<string>("");
   const [isUnlocking, setIsUnlocking] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
     const updateDateTime = () => {
@@ -62,18 +60,6 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
       onUnlock();
     }, 300);
   }, [onUnlock]);
-
-  const handleLinkedInSignIn = useCallback(async () => {
-    if (sending || authLoading) return;
-    setSending(true);
-    setLocalError(null);
-
-    const { error } = await signInWithLinkedIn({ nextPath: "/lobby" });
-    setSending(false);
-    if (error) {
-      setLocalError(error);
-    }
-  }, [sending, authLoading, signInWithLinkedIn]);
 
   return (
     <div
@@ -148,53 +134,14 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
             )}
 
             <div className="mt-4 w-full">
-              {user ? (
-                <button
-                  type="button"
-                  onClick={handleUnlock}
-                  className="w-full h-10 rounded-md bg-white/90 hover:bg-white text-black text-[13px] font-semibold tracking-tight transition-colors"
-                >
-                  계속하기
-                </button>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={handleLinkedInSignIn}
-                    disabled={sending || authLoading}
-                    className="w-full h-10 px-3 rounded-md bg-[#0a66c2] hover:bg-[#0958a8]
-                      text-white text-[13px] font-semibold tracking-[0.01em] transition-colors
-                      disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="flex items-center justify-center gap-2">
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="w-4 h-4"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <title>LinkedIn</title>
-                        <path d="M4.98 3.5C4.98 4.88 3.87 6 2.5 6S0 4.88 0 3.5 1.11 1 2.48 1h.02C3.87 1 4.98 2.12 4.98 3.5ZM.5 8h4V23h-4V8Zm7 0h3.84v2.05h.06c.54-1.02 1.86-2.1 3.82-2.1 4.08 0 4.83 2.69 4.83 6.18V23h-4v-7.75c0-1.85-.03-4.23-2.57-4.23-2.57 0-2.96 2.01-2.96 4.1V23h-4V8Z" />
-                      </svg>
-                      {sending || authLoading ? "연결 중..." : "LinkedIn으로 로그인"}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleUnlock}
-                    className="w-full h-10 rounded-md bg-white/10 hover:bg-white/15 text-white text-[13px] font-semibold transition-colors"
-                  >
-                    Guest로 둘러보기
-                  </button>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={handleUnlock}
+                className="w-full h-10 rounded-md bg-white/90 hover:bg-white text-black text-[13px] font-semibold tracking-tight transition-colors"
+              >
+                클릭하여 시작
+              </button>
             </div>
-
-            {(localError || authError) && (
-              <div className="mt-2 text-[11px] text-[#ffb3b3]">
-                {localError || authError}
-              </div>
-            )}
           </div>
         </div>
       </div>

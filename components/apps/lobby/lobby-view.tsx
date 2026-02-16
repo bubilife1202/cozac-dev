@@ -123,7 +123,6 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
                 onSend={sendMessage}
                 sending={sendingMessage}
                 channelName={activeChannel?.name ?? ""}
-                channelType={activeDmUserId ? "dm" : activeChannel?.name ?? ""}
                 sendError={sendError}
               />
           </>
@@ -180,7 +179,6 @@ export function LobbyView({ isMobile }: LobbyViewProps) {
           onSend={sendMessage}
           sending={sendingMessage}
           channelName={activeChannel?.name ?? ""}
-          channelType={activeDmUserId ? "dm" : activeChannel?.name ?? ""}
           sendError={sendError}
         />
       </div>

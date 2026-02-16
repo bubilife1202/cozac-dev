@@ -52,6 +52,12 @@ export interface LobbyMessage {
   };
 }
 
+const VISIBLE_CHANNEL_NAMES = new Set(["general", "activity"]);
+
+function filterVisibleChannels(rows: Channel[]): Channel[] {
+  return rows.filter((channel) => VISIBLE_CHANNEL_NAMES.has(channel.name));
+}
+
 function mapMessage(row: MessageRow): LobbyMessage {
   return {
     id: row.id,
@@ -234,15 +240,27 @@ export function useLobby() {
             .order("created_at", { ascending: true });
 
           if (!fallback.error && fallback.data) {
-            setChannels(fallback.data as Channel[]);
-            setActiveChannelId((prev) => prev ?? fallback.data[0]?.id ?? null);
+            const filteredChannels = filterVisibleChannels(fallback.data as Channel[]);
+            setChannels(filteredChannels);
+            setActiveChannelId((prev) => {
+              if (prev && filteredChannels.some((channel) => channel.id === prev)) {
+                return prev;
+              }
+              return filteredChannels[0]?.id ?? null;
+            });
           }
           return;
         }
 
         if (!ordered.error && ordered.data) {
-          setChannels(ordered.data as Channel[]);
-          setActiveChannelId((prev) => prev ?? ordered.data[0]?.id ?? null);
+          const filteredChannels = filterVisibleChannels(ordered.data as Channel[]);
+          setChannels(filteredChannels);
+          setActiveChannelId((prev) => {
+            if (prev && filteredChannels.some((channel) => channel.id === prev)) {
+              return prev;
+            }
+            return filteredChannels[0]?.id ?? null;
+          });
         }
       } finally {
         setChannelsLoading(false);

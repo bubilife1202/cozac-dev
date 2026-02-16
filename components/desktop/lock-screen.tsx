@@ -129,7 +129,7 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
 
             {!user && (
               <div className="mt-1 text-xs text-white/75 drop-shadow-sm">
-                개발자 구인구직 · 프로젝트 · 커뮤니티
+                개발 활동 · 프로젝트 · 커뮤니티
               </div>
             )}
 

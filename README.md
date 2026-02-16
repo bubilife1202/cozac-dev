@@ -199,12 +199,17 @@ OPENAI_API_KEY="<your-openai-api-key>"
 NEXT_PUBLIC_SITE_URL="https://yourdomain.com"
 REVALIDATE_TOKEN="<your-revalidate-token>"
 NEXT_PUBLIC_REVALIDATE_TOKEN="<your-revalidate-token>"
+
+# lobby activity feed (optional)
+LOBBY_ACTIVITY_WEBHOOK_SECRET="<generate-random-secret>"
+LOBBY_ACTIVITY_PROFILE_ID="<optional-profile-uuid>"
 ```
 
 **notes:**
 - `GITHUB_TOKEN` is optional but helps avoid rate limits when using iterm/finder github integration
 - `SUPABASE_SERVICE_ROLE_KEY` is needed for photo uploads (bypasses RLS)
 - `OPENAI_API_KEY` is used for ai photo categorization
+- `LOBBY_ACTIVITY_PROFILE_ID` is optional. If omitted, the oldest profile in `public.profiles` is used for activity posts.
 
 ## install dependencies
 
@@ -219,6 +224,18 @@ run the application in the command line and it will be available at http://local
 ## deploy
 
 deploy using [vercel](https://vercel.com)
+
+## github webhook for lobby activity feed
+
+to stream GitHub push activity into Lobby `#activity`:
+
+1. set `LOBBY_ACTIVITY_WEBHOOK_SECRET` in your environment
+2. in GitHub repo settings, create a webhook:
+   - payload URL: `https://yourdomain.com/api/lobby/activity`
+   - content type: `application/json`
+   - secret: same value as `LOBBY_ACTIVITY_WEBHOOK_SECRET`
+   - events: **Just the push event**
+3. push a commit and verify a new message appears in Lobby `#activity`
 
 ## markdown syntax for notes
 

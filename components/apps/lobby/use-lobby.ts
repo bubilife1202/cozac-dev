@@ -420,6 +420,15 @@ export function useLobby() {
 
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMessage.id)) return prev;
+              // Skip if this is our own message (already handled by optimistic update)
+              if (newRow.user_id === user.id && prev.some((m) => m.id.startsWith("optimistic-") && m.content === newRow.content)) {
+                // Replace optimistic message with the real one
+                return prev.map((m) =>
+                  m.id.startsWith("optimistic-") && m.content === newRow.content
+                    ? { ...newMessage }
+                    : m
+                );
+              }
               return [...prev, newMessage];
             });
           }
@@ -547,7 +556,7 @@ export function useLobby() {
       setSendingMessage(true);
       setSendError(null);
 
-      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticId = `optimistic-${crypto.randomUUID()}`;
       const optimisticMessage: LobbyMessage = {
         id: optimisticId,
         channelId: activeChannelId,

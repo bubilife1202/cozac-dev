@@ -128,21 +128,44 @@ export function useLobby() {
         return null;
       }
 
+      const latestName =
+        (currentUser.user_metadata?.full_name as string | undefined) ||
+        (currentUser.user_metadata?.name as string | undefined) ||
+        null;
+
+      const latestAvatar =
+        (currentUser.user_metadata?.avatar_url as string | undefined) ||
+        (currentUser.user_metadata?.picture as string | undefined) ||
+        null;
+
       if (existingProfile) {
+        const needsUpdate =
+          (latestName && existingProfile.display_name !== latestName) ||
+          (latestAvatar && existingProfile.avatar_url !== latestAvatar);
+
+        if (needsUpdate) {
+          const { data: updated } = await supabase
+            .from("profiles")
+            .update({
+              ...(latestName ? { display_name: latestName } : {}),
+              ...(latestAvatar ? { avatar_url: latestAvatar } : {}),
+            })
+            .eq("id", currentUser.id)
+            .select("*")
+            .single();
+
+          if (updated) {
+            setProfile(updated as Profile);
+            return updated as Profile;
+          }
+        }
+
         setProfile(existingProfile as Profile);
         return existingProfile as Profile;
       }
 
-      const displayName =
-        (currentUser.user_metadata?.full_name as string | undefined) ||
-        (currentUser.user_metadata?.name as string | undefined) ||
-        currentUser.email?.split("@")[0] ||
-        "guest";
-
-      const avatarUrl =
-        (currentUser.user_metadata?.avatar_url as string | undefined) ||
-        (currentUser.user_metadata?.picture as string | undefined) ||
-        null;
+      const displayName = latestName || currentUser.email?.split("@")[0] || "guest";
+      const avatarUrl = latestAvatar;
 
       const { data: insertedProfile, error: insertError } = await supabase
         .from("profiles")
@@ -524,14 +547,38 @@ export function useLobby() {
       setSendingMessage(true);
       setSendError(null);
 
-      const { error } = await supabase.from("messages").insert({
-        channel_id: activeChannelId,
-        user_id: user.id,
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticMessage: LobbyMessage = {
+        id: optimisticId,
+        channelId: activeChannelId,
+        userId: user.id,
         content: content.trim(),
-      });
+        createdAt: new Date().toISOString(),
+        profile: {
+          displayName: profile.display_name,
+          avatarUrl: profile.avatar_url,
+        },
+      };
+
+      setMessages((prev) => [...prev, optimisticMessage]);
+
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({
+          channel_id: activeChannelId,
+          user_id: user.id,
+          content: content.trim(),
+        })
+        .select("id")
+        .single();
 
       if (error) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         setSendError("메시지 전송에 실패했어요. 다시 시도해 주세요.");
+      } else if (data) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === optimisticId ? { ...m, id: data.id } : m))
+        );
       }
 
       setSendingMessage(false);

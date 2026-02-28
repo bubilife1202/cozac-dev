@@ -44,7 +44,7 @@ const labels = {
   older: "Older",
 };
 
-const categoryOrder = ["pinned", "life-deck", "portfolio", "today", "yesterday", "7", "30", "older"];
+const categoryOrder = ["life-deck", "pinned", "portfolio", "today", "yesterday", "7", "30", "older"];
 
 export default function Sidebar({
   notes: publicNotes,

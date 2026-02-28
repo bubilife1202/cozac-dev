@@ -49,10 +49,23 @@ export function groupNotesByCategory(notes: Note[], pinnedNotes: Set<string>) {
 }
 
 export function sortGroupedNotes(groupedNotes: GroupedNotes) {
+  const pinnedOrder = ["about-me", "projects"];
+
   Object.keys(groupedNotes).forEach((category) => {
-    groupedNotes[category].sort((a, b) =>
-      b.created_at.localeCompare(a.created_at)
-    );
+    if (category === "pinned") {
+      groupedNotes[category].sort((a, b) => {
+        const aIdx = pinnedOrder.indexOf(a.slug);
+        const bIdx = pinnedOrder.indexOf(b.slug);
+        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+        if (aIdx !== -1) return -1;
+        if (bIdx !== -1) return 1;
+        return b.created_at.localeCompare(a.created_at);
+      });
+    } else {
+      groupedNotes[category].sort((a, b) =>
+        b.created_at.localeCompare(a.created_at)
+      );
+    }
   });
 }
 

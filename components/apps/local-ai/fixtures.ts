@@ -88,8 +88,8 @@ export const DEFAULT_DIFFS: LocalAgentDiffSummary[] = [
 ];
 
 export const DEFAULT_MODEL_RECOMMENDATION: LocalAgentModelRecommendation = {
-  tier: "2b",
-  label: "Gemma 3 2B-class first",
-  reason: "Default to the lighter local model until diagnostics prove WebGPU and memory headroom for a 4B-class option.",
-  readiness: 42,
+  tier: "270m",
+  label: "Gemma 3 270M local smoke model",
+  reason: "Download and run the practical ONNX smoke model first; keep 2B/4B as future recommendations.",
+  readiness: 58,
 };

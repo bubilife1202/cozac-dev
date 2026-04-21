@@ -77,7 +77,7 @@ export type LocalAiStoreName =
   | "vectorIndexes"
   | "retrievalEvents";
 
-export type ModelTier = "unsupported" | "gemma-3-2b" | "gemma-3-4b";
+export type ModelTier = "unsupported" | "gemma-3-270m-it" | "gemma-3-2b" | "gemma-3-4b";
 
 export type ModelRecommendation = {
   tier: ModelTier;

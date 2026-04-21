@@ -24,6 +24,7 @@ const requiredFiles = [
   "tests/local-ai/diff.test.ts",
   "tests/local-ai/agent-core.test.ts",
   "tests/local-ai/rag.test.ts",
+  "tests/local-ai/model-engine.test.ts",
 ];
 
 for (const file of requiredFiles) {

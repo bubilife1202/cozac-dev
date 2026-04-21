@@ -77,42 +77,30 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
     };
   }
 
-  if (!signals.webGPU) {
-    return {
-      tier: "gemma-3-2b",
-      status: "degraded",
-      label: "Gemma 3 2B-class fallback",
-      reasons: ["WebGPU is unavailable; keep the model small and explain degraded local performance."],
-    };
-  }
-
   const cpuCores = signals.cpuCores ?? 0;
   const memoryGB = signals.memoryGB ?? 0;
 
-  if (cpuCores >= 8 && memoryGB >= 12) {
-    reasons.push("WebGPU is available with enough CPU and memory signal for a 4B-class local model.");
+  if (!signals.webGPU) {
     return {
-      tier: "gemma-3-4b",
-      status: "ready",
-      label: "Gemma 3 4B-class",
-      reasons,
+      tier: "gemma-3-270m-it",
+      status: "degraded",
+      label: "Gemma 3 270M local smoke model",
+      reasons: ["WebGPU is unavailable; use the runnable 270M ONNX model on WASM before recommending larger future models."],
     };
   }
 
-  if (cpuCores >= 4 && memoryGB >= 6) {
-    reasons.push("WebGPU is available, but device signals favor a smaller first-run model.");
-    return {
-      tier: "gemma-3-2b",
-      status: "ready",
-      label: "Gemma 3 2B-class",
-      reasons,
-    };
+  if (cpuCores >= 8 && memoryGB >= 12) {
+    reasons.push("WebGPU is available with enough CPU and memory signal to consider 2B/4B future upgrades after the 270M smoke model works.");
+  } else if (cpuCores >= 4 && memoryGB >= 6) {
+    reasons.push("WebGPU is available; keep 2B as a future recommendation and run 270M first.");
+  } else {
+    reasons.push("Device CPU or memory signal is low or unavailable; run the 270M smoke model before any larger recommendation.");
   }
 
   return {
-    tier: "gemma-3-2b",
-    status: "degraded",
-    label: "Gemma 3 2B-class conservative mode",
-    reasons: ["Device CPU or memory signal is low or unavailable."],
+    tier: "gemma-3-270m-it",
+    status: "ready",
+    label: "Gemma 3 270M local smoke model",
+    reasons,
   };
 }

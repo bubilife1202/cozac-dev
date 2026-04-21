@@ -113,8 +113,8 @@ function roleDot(role: LocalAgentFolderRole): string {
 }
 
 function readinessCopy(readiness: number): string {
-  if (readiness >= 75) return "4B-ready candidate";
-  if (readiness >= 45) return "2B recommended";
+  if (readiness >= 75) return "larger-model candidate";
+  if (readiness >= 45) return "270M runnable now";
   return "diagnostics required";
 }
 
@@ -156,10 +156,13 @@ function capabilityStatus(ready: boolean, partial = false): LocalAgentCapability
 }
 
 function toUiModelRecommendation(recommendation: ReturnType<typeof recommendLocalModel>): LocalAgentModelRecommendation {
-  const readiness = recommendation.tier === "gemma-3-4b" ? 82 : recommendation.status === "ready" ? 58 : recommendation.status === "degraded" ? 38 : 8;
+  const readiness = recommendation.tier === "gemma-3-270m-it"
+    ? recommendation.status === "ready" ? 62 : 46
+    : recommendation.tier === "gemma-3-4b" ? 82
+      : recommendation.status === "ready" ? 58 : recommendation.status === "degraded" ? 38 : 8;
 
   return {
-    tier: recommendation.tier === "gemma-3-4b" ? "4b" : recommendation.tier === "gemma-3-2b" ? "2b" : "unsupported",
+    tier: recommendation.tier === "gemma-3-4b" ? "4b" : recommendation.tier === "gemma-3-2b" ? "2b" : recommendation.tier === "gemma-3-270m-it" ? "270m" : "unsupported",
     label: recommendation.label,
     reason: recommendation.reasons.join(" "),
     readiness,
@@ -190,7 +193,7 @@ function createCapabilityCards(): {
         status: capabilityStatus(signals.webGPU, true),
         detail: signals.webGPU
           ? "WebGPU is available for browser-local model runtimes."
-          : "WebGPU is unavailable; model execution stays disabled/degraded, with no cloud fallback.",
+          : "WebGPU is unavailable; Gemma 270M can still load through WASM with degraded speed and no cloud fallback.",
       },
       {
         id: "indexeddb",
@@ -223,6 +226,182 @@ type PendingSecretOperation = {
   nextText?: string;
 };
 
+const RUNNABLE_LOCAL_MODEL_ID = "onnx-community/gemma-3-270m-it-ONNX";
+const RUNNABLE_LOCAL_MODEL_LABEL = "Gemma 3 270M local smoke model";
+
+type LocalModelUiStatus = "idle" | "loading" | "ready" | "generating" | "error";
+
+type LocalModelUiState = {
+  status: LocalModelUiStatus;
+  message: string;
+  progress?: number;
+  answer?: string;
+  error?: string;
+};
+
+type LocalModelProgressInput = {
+  status?: string;
+  message?: string;
+  file?: string;
+  progress?: number;
+  loaded?: number;
+  total?: number;
+};
+
+type LocalModelLoadOptions = {
+  modelId: string;
+  onProgress?: (progress: unknown) => void;
+};
+
+type LocalModelGenerateOptions = {
+  prompt: string;
+  modelId: string;
+  model?: unknown;
+  session?: unknown;
+  localContext?: string;
+  onProgress?: (progress: unknown) => void;
+};
+
+type LocalModelLoader = (options: LocalModelLoadOptions) => Promise<unknown>;
+type LocalModelGenerator = (options: LocalModelGenerateOptions) => Promise<unknown>;
+
+type LocalModelEngineModule = Record<string, unknown>;
+
+type ResolvedLocalModelEngine = {
+  load: LocalModelLoader;
+  generate: LocalModelGenerator;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getString(value: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function getNumber(value: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function normalizeProgressPercent(progress: LocalModelProgressInput): number | undefined {
+  const rawProgress = progress.progress;
+  if (typeof rawProgress === "number" && Number.isFinite(rawProgress)) {
+    const percent = rawProgress <= 1 ? rawProgress * 100 : rawProgress;
+    return Math.min(Math.max(Math.round(percent), 0), 100);
+  }
+
+  if (
+    typeof progress.loaded === "number" &&
+    typeof progress.total === "number" &&
+    Number.isFinite(progress.loaded) &&
+    Number.isFinite(progress.total) &&
+    progress.total > 0
+  ) {
+    return Math.min(Math.max(Math.round((progress.loaded / progress.total) * 100), 0), 100);
+  }
+
+  return undefined;
+}
+
+function describeModelProgress(progress: unknown): Pick<LocalModelUiState, "message" | "progress"> {
+  if (!isRecord(progress)) {
+    return { message: "Loading browser-local model assets..." };
+  }
+
+  const progressInput: LocalModelProgressInput = {
+    status: getString(progress, ["status", "task"]),
+    message: getString(progress, ["message", "detail"]),
+    file: getString(progress, ["file", "name"]),
+    progress: getNumber(progress, ["progress", "percentage"]),
+    loaded: getNumber(progress, ["loaded", "loadedBytes"]),
+    total: getNumber(progress, ["total", "totalBytes"]),
+  };
+  const message =
+    progressInput.message ??
+    (progressInput.file ? `Loading ${progressInput.file}` : undefined) ??
+    progressInput.status ??
+    "Loading browser-local model assets...";
+
+  return {
+    message,
+    progress: normalizeProgressPercent(progressInput),
+  };
+}
+
+function pickFunction(module: LocalModelEngineModule, names: string[]): unknown {
+  for (const name of names) {
+    const candidate = module[name];
+    if (typeof candidate === "function") {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+async function resolveLocalModelEngine(): Promise<ResolvedLocalModelEngine> {
+  const engineModule = (await import("@/lib/local-ai/model-engine")) as unknown as LocalModelEngineModule;
+  const load = pickFunction(engineModule, [
+    "loadBrowserLocalModel",
+    "loadLocalModel",
+    "loadLocalModelEngine",
+    "loadLocalGemmaModel",
+  ]);
+  const generate = pickFunction(engineModule, [
+    "generateBrowserLocalAnswer",
+    "generateLocalModelAnswer",
+    "generateLocalAnswer",
+    "answerWithLocalModel",
+  ]);
+
+  if (typeof load !== "function" || typeof generate !== "function") {
+    throw new Error(
+      "Local model engine is not ready yet: expected browser-local load and generate exports from lib/local-ai/model-engine.",
+    );
+  }
+
+  return {
+    load: load as LocalModelLoader,
+    generate: generate as LocalModelGenerator,
+  };
+}
+
+function extractModelAnswer(output: unknown): string {
+  if (typeof output === "string") {
+    return output.trim();
+  }
+
+  if (Array.isArray(output) && output.length > 0) {
+    return extractModelAnswer(output[0]);
+  }
+
+  if (isRecord(output)) {
+    const text = getString(output, ["answer", "text", "generated_text", "output_text", "response"]);
+    if (text) {
+      return text.trim();
+    }
+
+    const first = output[0];
+    if (first) {
+      return extractModelAnswer(first);
+    }
+  }
+
+  return "The local model returned an empty response.";
+}
+
 export function LocalAgentApp({
   isMobile = false,
   inShell = false,
@@ -237,8 +416,14 @@ export function LocalAgentApp({
   const [selectedRole, setSelectedRole] = useState<LocalAgentFolderRole>("code");
   const [prompt, setPrompt] = useState("Inspect the selected folder and propose the smallest safe change.");
   const [adapterNotice, setAdapterNotice] = useState<string | null>(null);
+  const [modelRun, setModelRun] = useState<LocalModelUiState>({
+    status: "idle",
+    message: `${RUNNABLE_LOCAL_MODEL_LABEL} is ready to download into this browser tab.`,
+  });
   const adaptersRef = useRef<Partial<Record<LocalAgentFolderRole, BrowserFolderAdapter>>>({});
   const pendingSecretsRef = useRef<Record<string, PendingSecretOperation>>({});
+  const modelEngineRef = useRef<ResolvedLocalModelEngine | null>(null);
+  const modelSessionRef = useRef<unknown>(null);
 
   useEffect(() => {
     if (state) {
@@ -255,6 +440,7 @@ export function LocalAgentApp({
       capabilities,
       modelRecommendation: recommendation,
     }));
+
 
     void openLocalAiDatabase()
       .then((database) => {
@@ -430,6 +616,101 @@ export function LocalAgentApp({
     [addEvent]
   );
 
+  const handleModelProgress = useCallback((progress: unknown, status: "loading" | "generating") => {
+    const nextProgress = describeModelProgress(progress);
+    setModelRun((current) => ({
+      ...current,
+      status,
+      message: nextProgress.message,
+      progress: nextProgress.progress ?? current.progress,
+      error: undefined,
+    }));
+  }, []);
+
+  const handleLoadModel = useCallback(async () => {
+    setModelRun({
+      status: "loading",
+      message: `Preparing ${RUNNABLE_LOCAL_MODEL_LABEL}; model files stay in the browser cache/runtime.`,
+      progress: 0,
+    });
+
+    try {
+      const engine = modelEngineRef.current ?? (await resolveLocalModelEngine());
+      modelEngineRef.current = engine;
+      const session = await engine.load({
+        modelId: RUNNABLE_LOCAL_MODEL_ID,
+        onProgress: (progress: unknown) => handleModelProgress(progress, "loading"),
+      });
+      modelSessionRef.current = session;
+      setModelRun((current) => ({
+        ...current,
+        status: "ready",
+        message: `${RUNNABLE_LOCAL_MODEL_LABEL} is loaded locally. Prompts now generate in this browser tab.`,
+        progress: 100,
+        error: undefined,
+      }));
+      addEvent({
+        title: "Local model loaded",
+        detail: `${RUNNABLE_LOCAL_MODEL_ID} loaded through the browser-local model engine. No chat route, localhost bridge, or cloud fallback was used by the UI.`,
+        status: "complete",
+      });
+      return session;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The browser-local model engine failed to load.";
+      setModelRun({
+        status: "error",
+        message: "Local model did not load.",
+        error: message,
+      });
+      addEvent({
+        title: "Local model load failed",
+        detail: message,
+        status: "blocked",
+      });
+      throw error;
+    }
+  }, [addEvent, handleModelProgress]);
+
+  const answerWithLocalModel = useCallback(
+    async (userPrompt: string, localContext?: string) => {
+      const engine = modelEngineRef.current ?? (await resolveLocalModelEngine());
+      modelEngineRef.current = engine;
+      const session = modelSessionRef.current ?? (await handleLoadModel());
+
+      setModelRun((current) => ({
+        ...current,
+        status: "generating",
+        message: "Generating with the browser-local model...",
+        error: undefined,
+      }));
+
+      const output = await engine.generate({
+        prompt: userPrompt,
+        modelId: RUNNABLE_LOCAL_MODEL_ID,
+        model: session,
+        session,
+        localContext,
+        onProgress: (progress: unknown) => handleModelProgress(progress, "generating"),
+      });
+      const answer = extractModelAnswer(output);
+
+      setModelRun((current) => ({
+        ...current,
+        status: "ready",
+        message: "Local answer generated in this browser tab.",
+        progress: 100,
+        answer,
+        error: undefined,
+      }));
+      addEvent({
+        title: "Local model answered",
+        detail: truncatePreview(answer),
+        status: "complete",
+      });
+    },
+    [addEvent, handleLoadModel, handleModelProgress]
+  );
+
   const handleSubmitPrompt = useCallback(async () => {
     const trimmed = prompt.trim();
 
@@ -443,13 +724,8 @@ export function LocalAgentApp({
       return;
     }
 
-    const adapter = adaptersRef.current[selectedRole];
-    if (!adapter) {
-      setAdapterNotice(`Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder first. The prompt stayed in this tab.`);
-      return;
-    }
-
     if (isCommandExecutionRequest(trimmed)) {
+      const adapter = adaptersRef.current[selectedRole];
       const result = await runLocalAgentTurn(trimmed, adapter);
       addEvent({ title: "Command request rejected", detail: result.message, status: "blocked" });
       return;
@@ -458,8 +734,14 @@ export function LocalAgentApp({
     const readTarget = parseReadPath(trimmed);
     const writeTarget = parseWriteRequest(trimmed);
 
+
     try {
       if (readTarget) {
+        const adapter = adaptersRef.current[selectedRole];
+        if (!adapter) {
+          setAdapterNotice(`Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before reading files. The prompt stayed in this tab.`);
+          return;
+        }
         if (isSecretLikePath(readTarget)) {
           blockSecret({ role: selectedRole, path: readTarget, operation: "read" });
           return;
@@ -469,6 +751,11 @@ export function LocalAgentApp({
       }
 
       if (writeTarget) {
+        const adapter = adaptersRef.current[selectedRole];
+        if (!adapter) {
+          setAdapterNotice(`Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before writing files. The prompt stayed in this tab.`);
+          return;
+        }
         if (isSecretLikePath(writeTarget.path)) {
           blockSecret({ role: selectedRole, path: writeTarget.path, operation: "write", nextText: writeTarget.text });
           return;
@@ -477,20 +764,18 @@ export function LocalAgentApp({
         return;
       }
 
-      const result = await runLocalAgentTurn(trimmed, adapter);
-      addEvent({
-        title: "Local agent turn completed",
-        detail: result.message,
-        status: result.status === "rejected" ? "blocked" : "complete",
-      });
+      const context = selectedFolder
+        ? `${ROLE_COPY[selectedRole].label} folder: ${selectedFolder.name}; permission: ${selectedFolder.permission}; indexed entries: ${selectedFolder.itemCount ?? "unknown"}.`
+        : undefined;
+      await answerWithLocalModel(trimmed, context);
     } catch (error) {
       addEvent({
-        title: "Local file operation failed",
-        detail: error instanceof Error ? error.message : "Unknown local adapter failure.",
+        title: "Local task failed",
+        detail: error instanceof Error ? error.message : "Unknown local adapter or model failure.",
         status: "blocked",
       });
     }
-  }, [addEvent, blockSecret, onSubmitPrompt, prompt, readPath, selectedRole, writePath]);
+  }, [addEvent, answerWithLocalModel, blockSecret, onSubmitPrompt, prompt, readPath, selectedFolder, selectedRole, writePath]);
 
   const handleReviewSecret = useCallback(
     async (eventId: string) => {
@@ -599,13 +884,14 @@ export function LocalAgentApp({
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
                           <div className="flex items-center gap-2 text-xs text-stone-300">
                             <LockKeyhole className="h-4 w-4 text-amber-200" />
-                            Browser-local prompt path; no server chat route or existing Messages sender is wired here.
+                            Browser-local prompt path; general questions use Gemma 270M in this tab; read/write stays adapter-scoped.
                           </div>
                           <Button onClick={handleSubmitPrompt} className="rounded-full bg-amber-300 text-stone-950 hover:bg-amber-200">
                             Run local task
                             <ChevronRight className="h-4 w-4" />
                           </Button>
                         </div>
+                        <ModelRuntimePanel modelRun={modelRun} onLoadModel={handleLoadModel} />
                       </div>
 
                       <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-4">
@@ -750,6 +1036,66 @@ function ModelBadge({ recommendation }: { recommendation: LocalAgentWorkbenchSta
       <div className="mt-3 h-2 rounded-full bg-white/10">
         <div className="h-full rounded-full bg-amber-300" style={{ width: `${Math.min(Math.max(recommendation.readiness, 0), 100)}%` }} />
       </div>
+    </div>
+  );
+}
+
+function ModelRuntimePanel({
+  modelRun,
+  onLoadModel,
+}: {
+  modelRun: LocalModelUiState;
+  onLoadModel: () => Promise<unknown>;
+}) {
+  const busy = modelRun.status === "loading" || modelRun.status === "generating";
+  const ready = modelRun.status === "ready";
+  const progress = typeof modelRun.progress === "number" ? Math.min(Math.max(modelRun.progress, 0), 100) : undefined;
+
+  return (
+    <div className="mt-3 rounded-3xl border border-white/10 bg-black/20 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100/75">
+            <Cpu className="h-4 w-4" />
+            Runnable local model
+          </div>
+          <div className="mt-2 text-sm font-medium text-stone-100">{RUNNABLE_LOCAL_MODEL_LABEL}</div>
+          <div className="mt-1 break-all text-[11px] text-stone-400">{RUNNABLE_LOCAL_MODEL_ID}</div>
+        </div>
+        <Button
+          type="button"
+          onClick={() => {
+            void onLoadModel().catch(() => undefined);
+          }}
+          disabled={busy}
+          variant="secondary"
+          size="sm"
+          className="rounded-full bg-white text-stone-950 hover:bg-stone-200"
+        >
+          {ready ? "Reload model" : busy ? "Working..." : "Download/load"}
+        </Button>
+      </div>
+
+      <div className="mt-3 rounded-2xl bg-white/[0.06] px-3 py-2">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="font-medium uppercase tracking-[0.12em] text-stone-300">{modelRun.status}</span>
+          {typeof progress === "number" && <span className="text-stone-400">{progress}%</span>}
+        </div>
+        {typeof progress === "number" && (
+          <div className="mt-2 h-1.5 rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-emerald-300 transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        )}
+        <p className="mt-2 text-xs leading-relaxed text-stone-300">{modelRun.message}</p>
+        {modelRun.error && <p className="mt-2 text-xs leading-relaxed text-rose-200">{modelRun.error}</p>}
+      </div>
+
+      {modelRun.answer && (
+        <div className="mt-3 rounded-2xl border border-emerald-200/20 bg-emerald-300/10 p-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-100">Latest local answer</div>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-100">{modelRun.answer}</p>
+        </div>
+      )}
     </div>
   );
 }

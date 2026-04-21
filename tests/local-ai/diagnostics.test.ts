@@ -18,7 +18,7 @@ test("reports unsupported state when folder access is unavailable", () => {
   assert.equal(recommendation.tier, "unsupported");
 });
 
-test("recommends degraded 2B-class mode when WebGPU is missing", () => {
+test("recommends degraded 270M smoke mode when WebGPU is missing", () => {
   const recommendation = recommendLocalModel({
     fileSystemAccess: true,
     webGPU: false,
@@ -30,10 +30,10 @@ test("recommends degraded 2B-class mode when WebGPU is missing", () => {
   });
 
   assert.equal(recommendation.status, "degraded");
-  assert.equal(recommendation.tier, "gemma-3-2b");
+  assert.equal(recommendation.tier, "gemma-3-270m-it");
 });
 
-test("recommends 4B-class only for high capability WebGPU devices", () => {
+test("keeps high capability WebGPU devices on the runnable 270M smoke model first", () => {
   const recommendation = recommendLocalModel({
     fileSystemAccess: true,
     webGPU: true,
@@ -45,10 +45,10 @@ test("recommends 4B-class only for high capability WebGPU devices", () => {
   });
 
   assert.equal(recommendation.status, "ready");
-  assert.equal(recommendation.tier, "gemma-3-4b");
+  assert.equal(recommendation.tier, "gemma-3-270m-it");
 });
 
-test("keeps midrange devices on 2B-class first-run model", () => {
+test("keeps midrange devices on the runnable 270M smoke model first", () => {
   const recommendation = recommendLocalModel({
     fileSystemAccess: true,
     webGPU: true,
@@ -60,5 +60,5 @@ test("keeps midrange devices on 2B-class first-run model", () => {
   });
 
   assert.equal(recommendation.status, "ready");
-  assert.equal(recommendation.tier, "gemma-3-2b");
+  assert.equal(recommendation.tier, "gemma-3-270m-it");
 });

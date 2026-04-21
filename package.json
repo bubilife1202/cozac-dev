@@ -13,7 +13,8 @@
     "test": "npm run test:local-ai",
     "test:local-ai": "node scripts/test-local-ai.mjs",
     "verify:local-ai": "node scripts/verify-local-ai-static.mjs",
-    "prove:local-ai-model": "node scripts/prove-local-ai-model.mjs"
+    "prove:local-ai-model": "node scripts/prove-local-ai-model.mjs",
+    "prove:local-ai-e2b-model": "node scripts/prove-local-ai-e2b-model.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.0.4",

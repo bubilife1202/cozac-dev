@@ -1,10 +1,20 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createBrowserClient } from "@supabase/ssr";
+import { getSupabasePublicEnv } from "./config";
+
+export function getOptionalClient() {
+  const { url, anonKey } = getSupabasePublicEnv();
+  if (!url || !anonKey) {
+    return null;
+  }
+
+  return createBrowserClient(url, anonKey);
+}
 
 export function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) {
-    throw new Error('Supabase URL and Key are required')
+  const client = getOptionalClient();
+  if (!client) {
+    throw new Error("Supabase URL and Key are required");
   }
-  return createBrowserClient(url, key)
+
+  return client;
 }

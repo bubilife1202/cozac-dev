@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { getOptionalServerClient } from "@/utils/supabase/server";
 
 function getSafeNextPath(value: string | null): string {
   if (!value) return "/lobby";
@@ -16,7 +16,13 @@ export async function GET(request: Request) {
   const nextPath = getSafeNextPath(requestUrl.searchParams.get("next"));
 
   if (code) {
-    const supabase = await createClient();
+    const supabase = await getOptionalServerClient();
+    if (!supabase) {
+      return NextResponse.redirect(
+        new URL("/lobby?auth=unavailable", requestUrl.origin)
+      );
+    }
+
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {

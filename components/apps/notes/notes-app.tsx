@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { createClient } from "@/utils/supabase/client";
+import { getOptionalClient } from "@/utils/supabase/client";
 import { Note as NoteType } from "@/lib/notes/types";
 import { SessionNotesProvider } from "@/app/(desktop)/notes/session-notes";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWindowFocus } from "@/lib/window-focus-context";
 import Sidebar from "./sidebar";
 import Note from "./note";
+import { ServiceUnavailable } from "@/components/ui/service-unavailable";
 
 interface NotesAppProps {
   isMobile?: boolean;
@@ -20,15 +21,24 @@ export function NotesApp({ isMobile = false, inShell = false, initialSlug }: Not
   const [selectedNote, setSelectedNote] = useState<NoteType | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSidebar, setShowSidebar] = useState(true);
-  const supabase = createClient();
+  const supabase = useRef(getOptionalClient()).current;
   const windowFocus = useWindowFocus();
   // Container ref for scoping dialogs to this app (fallback when not in desktop shell)
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Fetch public notes on mount
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false);
+      setNotes([]);
+      setSelectedNote(null);
+      return;
+    }
+
+    const client = supabase;
+
     async function fetchNotes() {
-      const { data } = await supabase
+      const { data } = await client
         .from("notes")
         .select("*")
         .eq("public", true)
@@ -46,11 +56,11 @@ export function NotesApp({ isMobile = false, inShell = false, initialSlug }: Not
 
         // Use initialSlug if provided, otherwise "about-me", otherwise first note
         const targetSlug = initialSlug || "about-me";
-        const defaultNote = data.find((n: NoteType) => n.slug === targetSlug);
+          const defaultNote = data.find((n: NoteType) => n.slug === targetSlug);
 
         if (defaultNote && !selectedNote) {
           // Note found in public notes - fetch full data
-          const { data: fullNote } = await supabase
+          const { data: fullNote } = await client
             .rpc("select_note", { note_slug_arg: defaultNote.slug })
             .single();
           if (fullNote) {
@@ -58,7 +68,7 @@ export function NotesApp({ isMobile = false, inShell = false, initialSlug }: Not
           }
         } else if (!defaultNote && initialSlug && !selectedNote) {
           // Note not in public notes - try to fetch directly (may be a private/session note)
-          const { data: fullNote } = await supabase
+          const { data: fullNote } = await client
             .rpc("select_note", { note_slug_arg: initialSlug })
             .single();
           if (fullNote) {
@@ -67,7 +77,7 @@ export function NotesApp({ isMobile = false, inShell = false, initialSlug }: Not
             // Note doesn't exist - fall back to first public note and update URL
             const fallbackNote = data[0];
             if (fallbackNote) {
-              const { data: fallbackFullNote } = await supabase
+              const { data: fallbackFullNote } = await client
                 .rpc("select_note", { note_slug_arg: fallbackNote.slug })
                 .single();
               if (fallbackFullNote) {
@@ -80,7 +90,7 @@ export function NotesApp({ isMobile = false, inShell = false, initialSlug }: Not
           // No initialSlug provided and no note selected - use first note
           const fallbackNote = data[0];
           if (fallbackNote) {
-            const { data: fullNote } = await supabase
+            const { data: fullNote } = await client
               .rpc("select_note", { note_slug_arg: fallbackNote.slug })
               .single();
             if (fullNote) {
@@ -95,8 +105,12 @@ export function NotesApp({ isMobile = false, inShell = false, initialSlug }: Not
   }, [supabase, initialSlug, isMobile, selectedNote]);
 
   const handleNoteSelect = useCallback(async (note: NoteType) => {
+    if (!supabase) return;
+
+    const client = supabase;
+
     // Fetch full note data using RPC
-    const { data: fullNote } = await supabase
+    const { data: fullNote } = await client
       .rpc("select_note", { note_slug_arg: note.slug })
       .single();
     if (fullNote) {
@@ -127,6 +141,15 @@ export function NotesApp({ isMobile = false, inShell = false, initialSlug }: Not
       setShowSidebar(false);
     }
   }, [isMobile]);
+
+  if (!supabase) {
+    return (
+      <ServiceUnavailable
+        title="Notes are temporarily offline."
+        description="Public notes will return once the storage service is restored."
+      />
+    );
+  }
 
   // Show empty background while loading to prevent flash
   if (loading) {

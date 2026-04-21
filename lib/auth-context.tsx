@@ -10,7 +10,7 @@ import React, {
   useState,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { createClient } from "@/utils/supabase/client";
+import { getOptionalClient } from "@/utils/supabase/client";
 
 interface AuthActionResult {
   error: string | null;
@@ -49,13 +49,20 @@ function mapOAuthErrorMessage(message: string): string {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => getOptionalClient(), []);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const initStartedRef = useRef(false);
 
   useEffect(() => {
+    if (!supabase) {
+      setUser(null);
+      setAuthError(null);
+      setLoading(false);
+      return;
+    }
+
     if (initStartedRef.current) return;
     initStartedRef.current = true;
 
@@ -124,6 +131,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithLinkedIn = useCallback(
     async (options?: { nextPath?: string }): Promise<AuthActionResult> => {
+      if (!supabase) {
+        const message =
+          "로그인이 잠시 비활성화되어 있어요. 저장소 복구 후 다시 사용할 수 있어요.";
+        setAuthError(message);
+        return { error: message };
+      }
+
       setAuthError(null);
       const nextPath = getSafeNextPath(options?.nextPath);
       const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
@@ -147,6 +161,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    if (!supabase) {
+      setUser(null);
+      return;
+    }
+
     await supabase.auth.signOut();
     setUser(null);
   }, [supabase]);

@@ -874,6 +874,10 @@ export function WindowManagerProvider({
    * - New visitor + no specific app → desktop default as-is
    */
   const computeInitialState = React.useCallback((): WindowManagerState => {
+    if (initialAppId === "local-ai") {
+      return withFocusedApp(getBaseState(), initialAppId);
+    }
+
     const savedState = loadStateFromStorage();
 
     if (savedState) {

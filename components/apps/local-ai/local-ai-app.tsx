@@ -1,26 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  AlertTriangle,
-  BrainCircuit,
-  CheckCircle2,
-  ChevronRight,
-  Cpu,
-  Database,
-  Diff,
-  FileLock2,
-  FolderPlus,
-  Gauge,
-  Laptop,
-  LockKeyhole,
-  MessageSquareText,
-  Play,
-  ShieldCheck,
-  Sparkles,
-  TerminalSquare,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, Diff, FolderPlus, MessageSquareText, Sparkles } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -45,7 +26,6 @@ import {
 import type {
   LocalAgentAppProps,
   LocalAgentCapabilityStatus,
-  LocalAgentEventStatus,
   LocalAgentModelRecommendation,
   LocalAgentToolEvent,
   LocalAgentFolderRole,
@@ -66,20 +46,6 @@ const ROLE_COPY: Record<LocalAgentFolderRole, { label: string; description: stri
     label: "Output",
     description: "Drafts and generated files; never auto-created as hidden project state.",
   },
-};
-
-const CAPABILITY_STYLE: Record<LocalAgentCapabilityStatus, string> = {
-  supported: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
-  partial: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200",
-  missing: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200",
-  checking: "border-slate-500/25 bg-slate-500/10 text-slate-700 dark:text-slate-200",
-};
-
-const EVENT_STYLE: Record<LocalAgentEventStatus, string> = {
-  queued: "bg-slate-500/10 text-slate-700 dark:text-slate-200",
-  running: "bg-blue-500/10 text-blue-700 dark:text-blue-200",
-  blocked: "bg-amber-500/10 text-amber-800 dark:text-amber-200",
-  complete: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
 };
 
 const PERMISSION_COPY: Record<LocalAgentPermissionState, string> = {
@@ -105,19 +71,6 @@ function statusLabel(status: LocalAgentCapabilityStatus): string {
   if (status === "missing") return "Unavailable";
   return "Checking";
 }
-
-function roleDot(role: LocalAgentFolderRole): string {
-  if (role === "code") return "bg-blue-500";
-  if (role === "materials") return "bg-violet-500";
-  return "bg-emerald-500";
-}
-
-function readinessCopy(readiness: number): string {
-  if (readiness >= 75) return "larger-model candidate";
-  if (readiness >= 45) return "270M runnable now";
-  return "diagnostics required";
-}
-
 
 function makeUiId(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -407,7 +360,6 @@ export function LocalAgentApp({
   inShell = false,
   state,
   onSelectFolder,
-  onStartSession,
   onSubmitPrompt,
   onReviewSecretOperation,
 }: LocalAgentAppProps) {
@@ -457,7 +409,6 @@ export function LocalAgentApp({
     [selectedRole, workbench.folders]
   );
 
-  const selectedRoleCopy = ROLE_COPY[selectedRole];
 
   const persistRecord = useCallback((storeName: "toolEvents" | "diffs" | "diagnostics", record: Record<string, unknown> & { id: string }) => {
     void putLocalAiRecord(storeName, record).catch(() => {
@@ -525,22 +476,6 @@ export function LocalAgentApp({
     },
     [addEvent, onSelectFolder, updateFolder]
   );
-
-  const handleStartSession = useCallback(async () => {
-    if (onStartSession) {
-      await onStartSession();
-      return;
-    }
-
-    const adapter = adaptersRef.current[selectedRole];
-    const result = await runLocalAgentTurn("inspect selected folder", adapter);
-    addEvent({
-      title: result.status === "rejected" ? "Session rejected" : "Local session ready",
-      detail: result.message,
-      status: result.status === "rejected" ? "blocked" : "complete",
-    });
-    setAdapterNotice(result.message);
-  }, [addEvent, onStartSession, selectedRole]);
 
   const appendDiff = useCallback(
     (filePath: string, previousText: string, nextText: string) => {
@@ -807,414 +742,195 @@ export function LocalAgentApp({
     [onReviewSecretOperation, readPath, writePath]
   );
 
+  const modelBusy = modelRun.status === "loading" || modelRun.status === "generating";
+  const modelReady = modelRun.status === "ready";
+  const visibleEvents = workbench.events.slice(0, 6);
+  const visibleDiffs = workbench.diffs.slice(0, 3);
+
   return (
     <div
       data-app="local-ai"
       data-mobile={isMobile ? "true" : "false"}
-      className={cn(
-        "h-full w-full overflow-hidden bg-[#f6f1e7] text-stone-950 dark:bg-[#11100d] dark:text-stone-50",
-        "selection:bg-amber-300/50 selection:text-stone-950"
-      )}
+      data-shell={inShell ? "true" : "false"}
+      className="h-full w-full overflow-hidden bg-[#f4efe4] text-[#17120b] dark:bg-[#15120d] dark:text-[#f7efe1]"
     >
-      <div className="relative h-full overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_14%,rgba(245,158,11,0.22),transparent_30%),radial-gradient(circle_at_84%_18%,rgba(59,130,246,0.16),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.72),transparent_38%)] dark:bg-[radial-gradient(circle_at_18%_14%,rgba(245,158,11,0.18),transparent_30%),radial-gradient(circle_at_84%_18%,rgba(59,130,246,0.16),transparent_34%)]" />
-        <div className="relative flex h-full flex-col overflow-hidden">
-          <header
-            className={cn(
-              "flex shrink-0 items-start justify-between gap-3 border-b border-stone-950/10 bg-stone-50/70 px-4 py-3 backdrop-blur-xl dark:border-stone-50/10 dark:bg-stone-950/50",
-              inShell ? "pt-5" : ""
-            )}
-          >
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-600 dark:text-stone-400">
-                <span>Browser-native</span>
-                <span className="h-1 w-1 rounded-full bg-stone-400" />
-                <span>Selected folders only</span>
+      <div className="flex h-full min-h-0 flex-col">
+        <header className="flex shrink-0 items-center justify-between border-b border-black/10 bg-[#fbf6ea]/90 px-5 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#1d1811]/90">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8a6b2e] dark:text-[#d5b66a]">Local-only agent</div>
+            <h1 className="mt-1 text-2xl font-semibold tracking-[-0.04em]">Local Agent</h1>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+            <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 font-medium text-emerald-700 dark:text-emerald-200">No cloud fallback</span>
+            <span className="rounded-full border border-black/10 bg-white/70 px-3 py-1 font-medium text-stone-700 dark:border-white/10 dark:bg-white/10 dark:text-stone-200">{modelReady ? "Model ready" : modelBusy ? "Model loading" : "Model idle"}</span>
+          </div>
+        </header>
+
+        <main className={cn("grid min-h-0 flex-1 gap-4 p-4", isMobile ? "grid-cols-1 overflow-auto" : "grid-cols-[300px_minmax(0,1fr)]") }>
+          <aside className="flex min-h-0 flex-col gap-4 overflow-auto rounded-[28px] border border-black/10 bg-[#fffaf0] p-4 shadow-sm dark:border-white/10 dark:bg-[#211b13]">
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 dark:text-stone-400">Model</div>
+                  <div className="mt-1 font-semibold">Gemma 270M</div>
+                </div>
+                <Sparkles className="h-5 w-5 text-amber-500" />
               </div>
-              <h1 className="mt-1 truncate text-2xl font-semibold tracking-[-0.04em] text-stone-950 dark:text-stone-50 sm:text-3xl">
-                Local Agent
-              </h1>
-            </div>
-            <div className="hidden max-w-[260px] rounded-2xl border border-stone-950/10 bg-white/65 px-3 py-2 text-xs leading-relaxed text-stone-700 shadow-sm dark:border-stone-50/10 dark:bg-stone-900/70 dark:text-stone-300 sm:block">
-              No helper process, no loopback bridge, no cloud fallback, no terminal command execution.
-            </div>
-          </header>
+              <button
+                type="button"
+                onClick={() => void handleLoadModel().catch(() => undefined)}
+                disabled={modelBusy}
+                className="flex min-h-11 w-full items-center justify-center rounded-2xl bg-[#17120b] px-4 py-2 text-sm font-semibold text-white transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#f5deb0] dark:text-[#17120b]"
+              >
+                {modelReady ? "Reload local model" : modelBusy ? "Loading..." : "Download / load model"}
+              </button>
+              <div className="mt-3 rounded-2xl bg-black/[0.04] p-3 text-xs leading-relaxed text-stone-600 dark:bg-white/[0.06] dark:text-stone-300">
+                <div className="flex items-center justify-between gap-3 font-medium uppercase tracking-[0.14em]">
+                  <span>{modelRun.status}</span>
+                  {typeof modelRun.progress === "number" && <span>{modelRun.progress}%</span>}
+                </div>
+                {typeof modelRun.progress === "number" && (
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                    <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.min(Math.max(modelRun.progress, 0), 100)}%` }} />
+                  </div>
+                )}
+                <p className="mt-2">{modelRun.error ?? modelRun.message}</p>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                2B E2B is verified by CLI proof. The web UI keeps 270M as the quick browser smoke model for now.
+              </p>
+            </section>
 
-          <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
-            <main
-              className={cn(
-                "grid min-h-full gap-4 p-3 sm:p-4 xl:p-5",
-                isMobile ? "grid-cols-1" : "grid-cols-1 xl:grid-cols-[290px_minmax(0,1fr)_310px]"
-              )}
-            >
-              <section className="flex min-h-0 flex-col gap-4">
-                <SafetyPanel />
-                <FolderPanel
-                  folders={workbench.folders}
-                  selectedRole={selectedRole}
-                  onSelectRole={setSelectedRole}
-                  onSelectFolder={handleSelectFolder}
-                />
-              </section>
-
-              <section className="flex min-h-0 flex-col gap-4">
-                <div className="rounded-[2rem] border border-stone-950/10 bg-stone-950 p-1 text-stone-50 shadow-2xl shadow-stone-950/10 dark:border-stone-50/10 dark:bg-black">
-                  <div className="rounded-[1.7rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.12),transparent_34%),#15130f] p-4 sm:p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-amber-200/80">
-                          <BrainCircuit className="h-4 w-4" />
-                          Workbench
-                        </div>
-                        <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-[-0.055em] sm:text-5xl">
-                          Ask for file work without leaving the browser.
-                        </h2>
+            <section className="border-t border-black/10 pt-4 dark:border-white/10">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 dark:text-stone-400">Workspace</div>
+              <div className="grid gap-2">
+                {workbench.folders.map((folder) => {
+                  const selected = selectedRole === folder.role;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      onClick={() => setSelectedRole(folder.role)}
+                      className={cn(
+                        "rounded-2xl border px-3 py-3 text-left transition",
+                        selected
+                          ? "border-[#17120b] bg-[#17120b] text-white dark:border-[#f5deb0] dark:bg-[#f5deb0] dark:text-[#17120b]"
+                          : "border-black/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2 text-sm font-semibold">
+                        <span>{ROLE_COPY[folder.role].label}</span>
+                        <span className="text-[10px] uppercase tracking-[0.12em] opacity-70">{PERMISSION_COPY[folder.permission]}</span>
                       </div>
-                      <ModelBadge recommendation={workbench.modelRecommendation} />
-                    </div>
+                      <div className="mt-1 truncate text-xs opacity-75">{folder.name}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleSelectFolder(selectedRole)}
+                className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-4 py-2 text-sm font-semibold transition hover:bg-white dark:border-white/10 dark:bg-white/[0.06] dark:hover:bg-white/[0.1]"
+              >
+                <FolderPlus className="h-4 w-4" />
+                Select {ROLE_COPY[selectedRole].label.toLowerCase()} folder
+              </button>
+            </section>
 
-                    <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
-                      <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-3">
-                        <Textarea
-                          value={prompt}
-                          onChange={(event) => setPrompt(event.target.value)}
-                          className="min-h-[140px] resize-none border-0 bg-transparent p-2 text-base text-stone-50 placeholder:text-stone-400 focus:outline-none"
-                          placeholder={'Try: read README.md or write notes/local-agent-demo.txt: Hello from the browser'}
-                        />
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
-                          <div className="flex items-center gap-2 text-xs text-stone-300">
-                            <LockKeyhole className="h-4 w-4 text-amber-200" />
-                            Browser-local prompt path; general questions use Gemma 270M in this tab; read/write stays adapter-scoped.
-                          </div>
-                          <Button onClick={handleSubmitPrompt} className="rounded-full bg-amber-300 text-stone-950 hover:bg-amber-200">
-                            Run local task
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <ModelRuntimePanel modelRun={modelRun} onLoadModel={handleLoadModel} />
-                      </div>
-
-                      <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-4">
-                        <div className="flex h-full flex-col justify-between gap-4">
-                          <div>
-                            <div className="text-xs uppercase tracking-[0.18em] text-stone-400">Selected lane</div>
-                            <div className="mt-2 flex items-center gap-2 text-lg font-semibold">
-                              <span className={cn("h-2.5 w-2.5 rounded-full", roleDot(selectedRole))} />
-                              {selectedRoleCopy.label}
-                            </div>
-                            <p className="mt-2 text-sm leading-relaxed text-stone-300">{selectedRoleCopy.description}</p>
-                          </div>
-                          <Button onClick={handleStartSession} variant="secondary" className="rounded-full bg-white text-stone-950 hover:bg-stone-200">
-                            <Play className="h-4 w-4" />
-                            Start session
-                          </Button>
-                        </div>
-                      </div>
+            <section className="border-t border-black/10 pt-4 dark:border-white/10">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 dark:text-stone-400">Readiness</div>
+              <div className="grid gap-2">
+                {workbench.capabilities.slice(0, 4).map((capability) => (
+                  <div key={capability.id} className="rounded-2xl bg-black/[0.04] px-3 py-2 text-xs dark:bg-white/[0.05]">
+                    <div className="flex items-center justify-between gap-2 font-medium">
+                      <span>{capability.label}</span>
+                      <span>{statusLabel(capability.status)}</span>
                     </div>
                   </div>
+                ))}
+              </div>
+            </section>
+          </aside>
+
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-[32px] border border-black/10 bg-[#fffdf8] shadow-sm dark:border-white/10 dark:bg-[#1e1912]">
+            <div className="border-b border-black/10 px-5 py-4 dark:border-white/10">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 dark:text-stone-400">Conversation</div>
+              <div className="mt-1 text-lg font-semibold tracking-[-0.02em]">Talk to the local model, or ask it to work with selected files.</div>
+            </div>
+
+            <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
+              <div className="space-y-4 p-5">
+                <div className="max-w-[760px] rounded-[26px] bg-[#f1eadc] p-4 text-sm leading-relaxed text-stone-700 dark:bg-white/[0.07] dark:text-stone-200">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400">Local Agent</div>
+                  Load the model, then type naturally. Use <span className="font-semibold">read README.md</span> or <span className="font-semibold">write notes/demo.txt: hello</span> when you want folder tools.
                 </div>
 
+                {modelRun.answer && (
+                  <div className="ml-auto max-w-[760px] rounded-[26px] bg-[#17120b] p-4 text-sm leading-relaxed text-white dark:bg-[#f5deb0] dark:text-[#17120b]">
+                    <div className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] opacity-70">Latest answer</div>
+                    <p className="whitespace-pre-wrap">{modelRun.answer}</p>
+                  </div>
+                )}
+
                 {adapterNotice && (
-                  <div className="rounded-2xl border border-amber-500/25 bg-amber-100/75 px-4 py-3 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-100">
+                  <div className="max-w-[760px] rounded-[22px] border border-amber-500/25 bg-amber-100/70 p-3 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-100">
                     {adapterNotice}
                   </div>
                 )}
 
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                  <SelectedFolderCard folderName={selectedFolder?.name ?? "No folder selected"} permission={selectedFolder?.permission ?? "unknown"} />
-                  <DiffPanel diffs={workbench.diffs} />
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-[24px] bg-black/[0.035] p-4 dark:bg-white/[0.05]">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><MessageSquareText className="h-4 w-4" /> Activity</div>
+                    <div className="space-y-2">
+                      {visibleEvents.map((event) => (
+                        <div key={event.id} className="rounded-2xl bg-white/70 p-3 text-xs leading-relaxed dark:bg-black/20">
+                          <div className="flex items-center justify-between gap-2 font-semibold">
+                            <span>{event.title}</span>
+                            <span className="uppercase tracking-[0.12em] opacity-60">{event.status}</span>
+                          </div>
+                          <p className="mt-1 opacity-70">{event.detail}</p>
+                          {event.approvalRequired && (
+                            <button type="button" onClick={() => void handleReviewSecret(event.id)} className="mt-2 rounded-full border border-black/10 px-3 py-1 font-semibold dark:border-white/10">Approve once</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-[24px] bg-black/[0.035] p-4 dark:bg-white/[0.05]">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><Diff className="h-4 w-4" /> File changes</div>
+                    <div className="space-y-2">
+                      {visibleDiffs.map((diff) => (
+                        <div key={diff.id} className="rounded-2xl bg-white/70 p-3 text-xs leading-relaxed dark:bg-black/20">
+                          <div className="font-semibold">{diff.filePath}</div>
+                          <p className="mt-1 opacity-70">{diff.summary}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </section>
-
-              <section className="flex min-h-0 flex-col gap-4">
-                <DiagnosticsPanel capabilities={workbench.capabilities} recommendation={workbench.modelRecommendation} />
-                <EventPanel events={workbench.events} onReviewSecret={handleReviewSecret} />
-              </section>
-            </main>
-          </ScrollArea>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SafetyPanel() {
-  return (
-    <div className="rounded-[1.75rem] border border-stone-950/10 bg-white/70 p-4 shadow-sm dark:border-stone-50/10 dark:bg-stone-900/70">
-      <div className="flex items-center gap-2 text-sm font-semibold text-stone-950 dark:text-stone-50">
-        <ShieldCheck className="h-5 w-5 text-emerald-600" />
-        Version 1 guardrails
-      </div>
-      <div className="mt-4 grid gap-2 text-sm text-stone-700 dark:text-stone-300">
-        <Guardrail icon={<Laptop className="h-4 w-4" />} label="Runs in the browser tab only" />
-        <Guardrail icon={<Database className="h-4 w-4" />} label="Stores sessions, logs, and retrieval indexes in IndexedDB" />
-        <Guardrail icon={<TerminalSquare className="h-4 w-4" />} label="Rejects command execution requests" />
-        <Guardrail icon={<FileLock2 className="h-4 w-4" />} label="Requires per-operation approval for secret-like files" />
-      </div>
-    </div>
-  );
-}
-
-function Guardrail({ icon, label }: { icon: ReactNode; label: string }) {
-  return (
-    <div className="flex items-center gap-2 rounded-2xl bg-stone-950/[0.04] px-3 py-2 dark:bg-stone-50/[0.06]">
-      <span className="text-stone-600 dark:text-stone-300">{icon}</span>
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function FolderPanel({
-  folders,
-  selectedRole,
-  onSelectRole,
-  onSelectFolder,
-}: {
-  folders: LocalAgentWorkbenchState["folders"];
-  selectedRole: LocalAgentFolderRole;
-  onSelectRole: (role: LocalAgentFolderRole) => void;
-  onSelectFolder: (role: LocalAgentFolderRole) => void;
-}) {
-  return (
-    <div className="rounded-[1.75rem] border border-stone-950/10 bg-white/70 p-4 shadow-sm dark:border-stone-50/10 dark:bg-stone-900/70">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold">Workspace folders</div>
-          <p className="mt-1 text-xs leading-relaxed text-stone-600 dark:text-stone-400">Only explicit selections become available to tools.</p>
-        </div>
-        <FolderPlus className="h-5 w-5 text-stone-500" />
-      </div>
-      <div className="mt-4 grid gap-2">
-        {folders.map((folder) => {
-          const copy = ROLE_COPY[folder.role];
-          const selected = selectedRole === folder.role;
-
-          return (
-            <button
-              key={folder.id}
-              type="button"
-              onClick={() => onSelectRole(folder.role)}
-              className={cn(
-                "group rounded-2xl border p-3 text-left transition",
-                selected
-                  ? "border-stone-950/30 bg-stone-950 text-white shadow-lg shadow-stone-950/10 dark:border-stone-50/30 dark:bg-stone-50 dark:text-stone-950"
-                  : "border-stone-950/10 bg-stone-50/70 hover:border-stone-950/20 dark:border-stone-50/10 dark:bg-stone-950/45 dark:hover:border-stone-50/20"
-              )}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className={cn("h-2.5 w-2.5 rounded-full", roleDot(folder.role))} />
-                  <span className="font-medium">{copy.label}</span>
-                </div>
-                <span className={cn("rounded-full px-2 py-1 text-[10px] font-medium", selected ? "bg-white/15" : "bg-stone-950/[0.06] dark:bg-stone-50/[0.08]")}>{PERMISSION_COPY[folder.permission]}</span>
               </div>
-              <div className={cn("mt-2 truncate text-sm", selected ? "text-stone-200 dark:text-stone-700" : "text-stone-600 dark:text-stone-400")}>{folder.name}</div>
-              {typeof folder.itemCount === "number" && (
-                <div className={cn("mt-2 text-xs", selected ? "text-stone-300 dark:text-stone-600" : "text-stone-500")}>{folder.itemCount} indexed entries</div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      <Button onClick={() => onSelectFolder(selectedRole)} className="mt-4 w-full rounded-full">
-        <FolderPlus className="h-4 w-4" />
-        Select {ROLE_COPY[selectedRole].label.toLowerCase()} folder
-      </Button>
-    </div>
-  );
-}
+            </ScrollArea>
 
-function ModelBadge({ recommendation }: { recommendation: LocalAgentWorkbenchState["modelRecommendation"] }) {
-  return (
-    <div className="min-w-[190px] rounded-3xl border border-amber-200/20 bg-amber-200/10 p-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs uppercase tracking-[0.18em] text-amber-100/70">Model</div>
-        <Sparkles className="h-4 w-4 text-amber-200" />
-      </div>
-      <div className="mt-2 text-lg font-semibold">{recommendation.label}</div>
-      <div className="mt-1 text-xs text-stone-300">{readinessCopy(recommendation.readiness)}</div>
-      <div className="mt-3 h-2 rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-amber-300" style={{ width: `${Math.min(Math.max(recommendation.readiness, 0), 100)}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function ModelRuntimePanel({
-  modelRun,
-  onLoadModel,
-}: {
-  modelRun: LocalModelUiState;
-  onLoadModel: () => Promise<unknown>;
-}) {
-  const busy = modelRun.status === "loading" || modelRun.status === "generating";
-  const ready = modelRun.status === "ready";
-  const progress = typeof modelRun.progress === "number" ? Math.min(Math.max(modelRun.progress, 0), 100) : undefined;
-
-  return (
-    <div className="mt-3 rounded-3xl border border-white/10 bg-black/20 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100/75">
-            <Cpu className="h-4 w-4" />
-            Runnable local model
-          </div>
-          <div className="mt-2 text-sm font-medium text-stone-100">{RUNNABLE_LOCAL_MODEL_LABEL}</div>
-          <div className="mt-1 break-all text-[11px] text-stone-400">{RUNNABLE_LOCAL_MODEL_ID}</div>
-        </div>
-        <Button
-          type="button"
-          onClick={() => {
-            void onLoadModel().catch(() => undefined);
-          }}
-          disabled={busy}
-          variant="secondary"
-          size="sm"
-          className="rounded-full bg-white text-stone-950 hover:bg-stone-200"
-        >
-          {ready ? "Reload model" : busy ? "Working..." : "Download/load"}
-        </Button>
-      </div>
-
-      <div className="mt-3 rounded-2xl bg-white/[0.06] px-3 py-2">
-        <div className="flex items-center justify-between gap-3 text-xs">
-          <span className="font-medium uppercase tracking-[0.12em] text-stone-300">{modelRun.status}</span>
-          {typeof progress === "number" && <span className="text-stone-400">{progress}%</span>}
-        </div>
-        {typeof progress === "number" && (
-          <div className="mt-2 h-1.5 rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-emerald-300 transition-all" style={{ width: `${progress}%` }} />
-          </div>
-        )}
-        <p className="mt-2 text-xs leading-relaxed text-stone-300">{modelRun.message}</p>
-        {modelRun.error && <p className="mt-2 text-xs leading-relaxed text-rose-200">{modelRun.error}</p>}
-      </div>
-
-      {modelRun.answer && (
-        <div className="mt-3 rounded-2xl border border-emerald-200/20 bg-emerald-300/10 p-3">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-100">Latest local answer</div>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-100">{modelRun.answer}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SelectedFolderCard({ folderName, permission }: { folderName: string; permission: LocalAgentPermissionState }) {
-  return (
-    <div className="rounded-[1.75rem] border border-stone-950/10 bg-white/70 p-4 dark:border-stone-50/10 dark:bg-stone-900/70">
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        <Gauge className="h-5 w-5 text-blue-600" />
-        Current adapter target
-      </div>
-      <div className="mt-4 rounded-2xl bg-stone-950 p-4 text-stone-50 dark:bg-black">
-        <div className="text-xs uppercase tracking-[0.18em] text-stone-400">Folder</div>
-        <div className="mt-2 truncate text-lg font-semibold">{folderName}</div>
-        <div className="mt-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs">Permission: {PERMISSION_COPY[permission]}</div>
-      </div>
-      <p className="mt-3 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-        UI surfaces folder state from adapter metadata only; it does not probe paths or enumerate files by itself.
-      </p>
-    </div>
-  );
-}
-
-function DiffPanel({ diffs }: { diffs: LocalAgentWorkbenchState["diffs"] }) {
-  return (
-    <div className="rounded-[1.75rem] border border-stone-950/10 bg-white/70 p-4 dark:border-stone-50/10 dark:bg-stone-900/70">
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        <Diff className="h-5 w-5 text-violet-600" />
-        Reviewable changes
-      </div>
-      <div className="mt-4 grid gap-3">
-        {diffs.map((diff) => (
-          <div key={diff.id} className="rounded-2xl border border-stone-950/10 bg-stone-50/80 p-3 dark:border-stone-50/10 dark:bg-stone-950/50">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{diff.filePath}</div>
-                <p className="mt-1 text-xs leading-relaxed text-stone-600 dark:text-stone-400">{diff.summary}</p>
+            <div className={cn("border-t border-black/10 bg-[#fbf6ea] p-4 dark:border-white/10 dark:bg-[#18140f]", inShell ? "pb-24" : "")}>
+              <div className="flex gap-3">
+                <Textarea
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  className="min-h-[76px] flex-1 resize-none rounded-3xl border-black/10 bg-white/80 p-4 text-base shadow-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-white/10 dark:bg-white/[0.06]"
+                  placeholder="Ask a question, or try read README.md"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSubmitPrompt()}
+                  className="min-h-[76px] rounded-3xl bg-amber-500 px-5 text-sm font-bold text-[#17120b] transition hover:scale-[1.02]"
+                >
+                  Run
+                </button>
               </div>
-              <span className="rounded-full bg-stone-950 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-stone-50 dark:bg-stone-50 dark:text-stone-950">
-                {diff.status}
-              </span>
+              <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">Everything here stays in this browser tab unless you explicitly choose a folder.</p>
             </div>
-            <div className="mt-3 flex gap-2 text-xs font-medium">
-              <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-200">+{diff.additions}</span>
-              <span className="rounded-full bg-rose-500/10 px-2 py-1 text-rose-700 dark:text-rose-200">-{diff.deletions}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DiagnosticsPanel({
-  capabilities,
-  recommendation,
-}: {
-  capabilities: LocalAgentWorkbenchState["capabilities"];
-  recommendation: LocalAgentModelRecommendation;
-}) {
-  return (
-    <div className="rounded-[1.75rem] border border-stone-950/10 bg-white/70 p-4 shadow-sm dark:border-stone-50/10 dark:bg-stone-900/70">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Cpu className="h-5 w-5 text-amber-600" />
-          Readiness
-        </div>
-        <span className="rounded-full bg-stone-950 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-stone-50 dark:bg-stone-50 dark:text-stone-950">
-          {recommendation.tier}
-        </span>
-      </div>
-      <p className="mt-3 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{recommendation.reason}</p>
-      <div className="mt-4 grid gap-2">
-        {capabilities.map((capability) => (
-          <div key={capability.id} className={cn("rounded-2xl border px-3 py-2", CAPABILITY_STYLE[capability.status])}>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">{capability.label}</span>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">{statusLabel(capability.status)}</span>
-            </div>
-            <p className="mt-1 text-xs leading-relaxed opacity-80">{capability.detail}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function EventPanel({
-  events,
-  onReviewSecret,
-}: {
-  events: LocalAgentWorkbenchState["events"];
-  onReviewSecret: (eventId: string) => void;
-}) {
-  return (
-    <div className="rounded-[1.75rem] border border-stone-950/10 bg-white/70 p-4 shadow-sm dark:border-stone-50/10 dark:bg-stone-900/70">
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        <MessageSquareText className="h-5 w-5 text-emerald-600" />
-        Work log
-      </div>
-      <div className="mt-4 grid gap-3">
-        {events.map((event) => (
-          <div key={event.id} className="rounded-2xl border border-stone-950/10 bg-stone-50/80 p-3 dark:border-stone-50/10 dark:bg-stone-950/50">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium">{event.title}</div>
-                {event.filePath && <div className="mt-1 truncate text-xs text-stone-500">{event.filePath}</div>}
-              </div>
-              <span className={cn("rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]", EVENT_STYLE[event.status])}>{event.status}</span>
-            </div>
-            <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-400">{event.detail}</p>
-            {event.approvalRequired && (
-              <Button onClick={() => onReviewSecret(event.id)} variant="outline" size="sm" className="mt-3 rounded-full bg-transparent">
-                <AlertTriangle className="h-4 w-4" />
-                Review approval
-              </Button>
-            )}
-          </div>
-        ))}
+          </section>
+        </main>
       </div>
     </div>
   );

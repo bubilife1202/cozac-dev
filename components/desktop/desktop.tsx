@@ -123,7 +123,7 @@ function loadImageAndGetSize(
   });
 }
 
-function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFile }: { initialNoteSlug?: string; initialTextEditFile?: string; initialPreviewFile?: string }) {
+function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, initialPreviewFile }: { initialAppId?: string; initialNoteSlug?: string; initialTextEditFile?: string; initialPreviewFile?: string }) {
   const {
     openWindow,
     focusWindow,
@@ -464,9 +464,9 @@ function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFi
   const handleWake = useCallback(() => setMode("locked"), []);
 
   const handleBootComplete = useCallback(() => {
-    setRestoreDefaultOnUnlock(true);
+    setRestoreDefaultOnUnlock(!initialAppId);
     setMode("locked");
-  }, []);
+  }, [initialAppId]);
 
   const handleUnlock = useCallback(() => {
     setMode("active");
@@ -498,10 +498,10 @@ function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFi
       return;
     }
 
-    setRestoreDefaultOnUnlock(true);
+    setRestoreDefaultOnUnlock(!initialAppId);
     setMode("locked");
     setStartupPhase("ready");
-  }, [startupPhase, authLoading, user]);
+  }, [startupPhase, authLoading, user, initialAppId]);
 
   useEffect(() => {
     if (startupPhase !== "ready") return;
@@ -696,7 +696,7 @@ export function Desktop({ initialAppId, initialNoteSlug, initialTextEditFile, in
     <RecentsProvider>
       <FileMenuProvider>
         <WindowManagerProvider key={initialAppId || "default"} initialAppId={initialAppId}>
-          <DesktopContent initialNoteSlug={initialNoteSlug} initialTextEditFile={initialTextEditFile} initialPreviewFile={initialPreviewFile} />
+          <DesktopContent initialAppId={initialAppId} initialNoteSlug={initialNoteSlug} initialTextEditFile={initialTextEditFile} initialPreviewFile={initialPreviewFile} />
         </WindowManagerProvider>
       </FileMenuProvider>
     </RecentsProvider>

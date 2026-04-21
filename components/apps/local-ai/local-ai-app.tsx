@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Diff, FolderPlus, MessageSquareText, Sparkles } from "lucide-react";
+import { CheckCircle2, FolderPlus, Sparkles } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -63,13 +63,6 @@ function mergeWorkbenchState(state?: Partial<LocalAgentWorkbenchState>): LocalAg
     diffs: state?.diffs ?? DEFAULT_DIFFS,
     modelRecommendation: state?.modelRecommendation ?? DEFAULT_MODEL_RECOMMENDATION,
   };
-}
-
-function statusLabel(status: LocalAgentCapabilityStatus): string {
-  if (status === "supported") return "Ready";
-  if (status === "partial") return "Partial";
-  if (status === "missing") return "Unavailable";
-  return "Checking";
 }
 
 function makeUiId(prefix: string): string {
@@ -150,11 +143,11 @@ function createCapabilityCards(): {
       },
       {
         id: "indexeddb",
-        label: "IndexedDB storage",
+        label: "Browser storage",
         status: capabilityStatus(signals.indexedDB),
         detail: signals.indexedDB
           ? "Browser-local stores can hold sessions, logs, diffs, approvals, and retrieval metadata."
-          : "IndexedDB is required; private-mode/quota failures are shown instead of using a server.",
+          : "Browser storage is required; private-mode/quota failures are shown instead of using a server.",
       },
       {
         id: "device",
@@ -177,6 +170,12 @@ type PendingSecretOperation = {
   path: string;
   operation: "read" | "write";
   nextText?: string;
+};
+
+type ChatMessage = {
+  id: string;
+  role: "assistant" | "user";
+  text: string;
 };
 
 const RUNNABLE_LOCAL_MODEL_ID = "onnx-community/gemma-3-270m-it-ONNX";
@@ -372,6 +371,13 @@ export function LocalAgentApp({
     status: "idle",
     message: `${RUNNABLE_LOCAL_MODEL_LABEL} is ready to download into this browser tab.`,
   });
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "initial-load-gate",
+      role: "assistant",
+      text: "Load a local model to start.",
+    },
+  ]);
   const adaptersRef = useRef<Partial<Record<LocalAgentFolderRole, BrowserFolderAdapter>>>({});
   const pendingSecretsRef = useRef<Record<string, PendingSecretOperation>>({});
   const modelEngineRef = useRef<ResolvedLocalModelEngine | null>(null);
@@ -397,10 +403,10 @@ export function LocalAgentApp({
     void openLocalAiDatabase()
       .then((database) => {
         database.close();
-        setAdapterNotice("IndexedDB local stores are ready; no Local Agent state is sent to the server.");
+        setAdapterNotice("Browser-local storage is ready; no Local Agent state is sent to the server.");
       })
       .catch((error: unknown) => {
-        setAdapterNotice(error instanceof Error ? error.message : "IndexedDB is unavailable for Local Agent state.");
+        setAdapterNotice(error instanceof Error ? error.message : "Browser storage is unavailable for Local Agent state.");
       });
   }, [state]);
 
@@ -498,15 +504,29 @@ export function LocalAgentApp({
     [persistRecord]
   );
 
+  const appendChatMessage = useCallback((role: ChatMessage["role"], text: string) => {
+    setMessages((current) => [
+      ...current,
+      {
+        id: makeUiId("message"),
+        role,
+        text,
+      },
+    ]);
+  }, []);
+
   const readPath = useCallback(
     async (path: string, approvalId?: string) => {
       const adapter = adaptersRef.current[selectedRole];
       if (!adapter) {
-        setAdapterNotice(`Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before reading files.`);
+        const message = `Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before reading files.`;
+        setAdapterNotice(message);
+        appendChatMessage("assistant", message);
         return;
       }
 
       const read = await adapter.readTextFile(path, approvalId);
+      appendChatMessage("assistant", `Read ${read.path} locally. Preview: ${truncatePreview(read.text)}`);
       addEvent({
         title: `Read ${read.path}`,
         detail: `Loaded ${read.size} bytes locally. Preview: ${truncatePreview(read.text)}`,
@@ -514,19 +534,22 @@ export function LocalAgentApp({
         filePath: read.path,
       });
     },
-    [addEvent, selectedRole]
+    [addEvent, appendChatMessage, selectedRole]
   );
 
   const writePath = useCallback(
     async (path: string, nextText: string, approvalId?: string) => {
       const adapter = adaptersRef.current[selectedRole];
       if (!adapter) {
-        setAdapterNotice(`Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before writing files.`);
+        const message = `Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before writing files.`;
+        setAdapterNotice(message);
+        appendChatMessage("assistant", message);
         return;
       }
 
       const write = await adapter.writeTextFile(path, nextText, approvalId);
       appendDiff(write.path, write.previousText, write.nextText);
+      appendChatMessage("assistant", `Wrote ${write.path} locally and recorded a reviewable change summary.`);
       addEvent({
         title: `Wrote ${write.path}`,
         detail: "Applied the write through the selected-folder adapter and recorded a local diff summary.",
@@ -534,7 +557,7 @@ export function LocalAgentApp({
         filePath: write.path,
       });
     },
-    [addEvent, appendDiff, selectedRole]
+    [addEvent, appendChatMessage, appendDiff, selectedRole]
   );
 
   const blockSecret = useCallback(
@@ -547,8 +570,9 @@ export function LocalAgentApp({
         approvalRequired: true,
       });
       pendingSecretsRef.current[event.id] = operation;
+      appendChatMessage("assistant", `${operation.path} looks secret-like. Approve this single ${operation.operation} in the side rail before content is exposed or modified.`);
     },
-    [addEvent]
+    [addEvent, appendChatMessage]
   );
 
   const handleModelProgress = useCallback((progress: unknown, status: "loading" | "generating") => {
@@ -637,13 +661,14 @@ export function LocalAgentApp({
         answer,
         error: undefined,
       }));
+      appendChatMessage("assistant", answer);
       addEvent({
         title: "Local model answered",
         detail: truncatePreview(answer),
         status: "complete",
       });
     },
-    [addEvent, handleLoadModel, handleModelProgress]
+    [addEvent, appendChatMessage, handleLoadModel, handleModelProgress]
   );
 
   const handleSubmitPrompt = useCallback(async () => {
@@ -654,6 +679,8 @@ export function LocalAgentApp({
       return;
     }
 
+    appendChatMessage("user", trimmed);
+
     if (onSubmitPrompt) {
       await onSubmitPrompt(trimmed);
       return;
@@ -662,6 +689,7 @@ export function LocalAgentApp({
     if (isCommandExecutionRequest(trimmed)) {
       const adapter = adaptersRef.current[selectedRole];
       const result = await runLocalAgentTurn(trimmed, adapter);
+      appendChatMessage("assistant", result.message);
       addEvent({ title: "Command request rejected", detail: result.message, status: "blocked" });
       return;
     }
@@ -674,7 +702,9 @@ export function LocalAgentApp({
       if (readTarget) {
         const adapter = adaptersRef.current[selectedRole];
         if (!adapter) {
-          setAdapterNotice(`Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before reading files. The prompt stayed in this tab.`);
+          const message = `Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before reading files. The prompt stayed in this tab.`;
+          setAdapterNotice(message);
+          appendChatMessage("assistant", message);
           return;
         }
         if (isSecretLikePath(readTarget)) {
@@ -688,7 +718,9 @@ export function LocalAgentApp({
       if (writeTarget) {
         const adapter = adaptersRef.current[selectedRole];
         if (!adapter) {
-          setAdapterNotice(`Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before writing files. The prompt stayed in this tab.`);
+          const message = `Select a ${ROLE_COPY[selectedRole].label.toLowerCase()} folder before writing files. The prompt stayed in this tab.`;
+          setAdapterNotice(message);
+          appendChatMessage("assistant", message);
           return;
         }
         if (isSecretLikePath(writeTarget.path)) {
@@ -709,8 +741,9 @@ export function LocalAgentApp({
         detail: error instanceof Error ? error.message : "Unknown local adapter or model failure.",
         status: "blocked",
       });
+      appendChatMessage("assistant", error instanceof Error ? error.message : "Unknown local adapter or model failure.");
     }
-  }, [addEvent, answerWithLocalModel, blockSecret, onSubmitPrompt, prompt, readPath, selectedFolder, selectedRole, writePath]);
+  }, [addEvent, answerWithLocalModel, appendChatMessage, blockSecret, onSubmitPrompt, prompt, readPath, selectedFolder, selectedRole, writePath]);
 
   const handleReviewSecret = useCallback(
     async (eventId: string) => {
@@ -744,8 +777,7 @@ export function LocalAgentApp({
 
   const modelBusy = modelRun.status === "loading" || modelRun.status === "generating";
   const modelReady = modelRun.status === "ready";
-  const visibleEvents = workbench.events.slice(0, 6);
-  const visibleDiffs = workbench.diffs.slice(0, 3);
+  const pendingApprovalEvents = workbench.events.filter((event) => event.approvalRequired).slice(0, 3);
 
   return (
     <div
@@ -797,7 +829,7 @@ export function LocalAgentApp({
                 <p className="mt-2">{modelRun.error ?? modelRun.message}</p>
               </div>
               <p className="mt-3 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-                2B E2B is verified by CLI proof. The web UI keeps 270M as the quick browser smoke model for now.
+                E2B is verified on this Mac, but 270M stays the fast web default.
               </p>
             </section>
 
@@ -837,19 +869,25 @@ export function LocalAgentApp({
               </button>
             </section>
 
-            <section className="border-t border-black/10 pt-4 dark:border-white/10">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 dark:text-stone-400">Readiness</div>
-              <div className="grid gap-2">
-                {workbench.capabilities.slice(0, 4).map((capability) => (
-                  <div key={capability.id} className="rounded-2xl bg-black/[0.04] px-3 py-2 text-xs dark:bg-white/[0.05]">
-                    <div className="flex items-center justify-between gap-2 font-medium">
-                      <span>{capability.label}</span>
-                      <span>{statusLabel(capability.status)}</span>
-                    </div>
+            {(pendingApprovalEvents.length > 0 || adapterNotice) && (
+              <section className="border-t border-black/10 pt-4 dark:border-white/10">
+                {pendingApprovalEvents.length > 0 && (
+                  <div className="grid gap-2">
+                    {pendingApprovalEvents.map((event) => (
+                      <div key={event.id} className="rounded-2xl bg-black/[0.04] p-3 text-xs leading-relaxed dark:bg-white/[0.05]">
+                        <div className="font-semibold">Approval needed</div>
+                        <p className="mt-1 opacity-70">{event.filePath ?? event.title}</p>
+                        <button type="button" onClick={() => void handleReviewSecret(event.id)} className="mt-2 rounded-full border border-black/10 px-3 py-1 font-semibold dark:border-white/10">Approve once</button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </section>
+                )}
+                {adapterNotice && (
+                  <p className="mt-3 text-xs leading-relaxed text-stone-500 first:mt-0 dark:text-stone-400">{adapterNotice}</p>
+                )}
+              </section>
+            )}
+
           </aside>
 
           <section className="flex min-h-0 flex-col overflow-hidden rounded-[32px] border border-black/10 bg-[#fffdf8] shadow-sm dark:border-white/10 dark:bg-[#1e1912]">
@@ -860,54 +898,36 @@ export function LocalAgentApp({
 
             <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
               <div className="space-y-4 p-5">
-                <div className="max-w-[760px] rounded-[26px] bg-[#f1eadc] p-4 text-sm leading-relaxed text-stone-700 dark:bg-white/[0.07] dark:text-stone-200">
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400">Local Agent</div>
-                  Load the model, then type naturally. Use <span className="font-semibold">read README.md</span> or <span className="font-semibold">write notes/demo.txt: hello</span> when you want folder tools.
-                </div>
-
-                {modelRun.answer && (
-                  <div className="ml-auto max-w-[760px] rounded-[26px] bg-[#17120b] p-4 text-sm leading-relaxed text-white dark:bg-[#f5deb0] dark:text-[#17120b]">
-                    <div className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] opacity-70">Latest answer</div>
-                    <p className="whitespace-pre-wrap">{modelRun.answer}</p>
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={cn(
+                      "max-w-[760px] rounded-[26px] p-4 text-sm leading-relaxed",
+                      message.role === "user"
+                        ? "ml-auto bg-[#17120b] text-white dark:bg-[#f5deb0] dark:text-[#17120b]"
+                        : "bg-[#f1eadc] text-stone-700 dark:bg-white/[0.07] dark:text-stone-200"
+                    )}
+                  >
+                    <div className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] opacity-65">
+                      {message.role === "user" ? "You" : "Local Agent"}
+                    </div>
+                    <p className="whitespace-pre-wrap">{message.text}</p>
                   </div>
-                )}
+                ))}
 
-                {adapterNotice && (
+                {!modelReady && (
                   <div className="max-w-[760px] rounded-[22px] border border-amber-500/25 bg-amber-100/70 p-3 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-100">
-                    {adapterNotice}
+                    <button
+                      type="button"
+                      onClick={() => void handleLoadModel().catch(() => undefined)}
+                      disabled={modelBusy}
+                      className="min-h-10 rounded-full bg-amber-500 px-4 font-semibold text-[#17120b] disabled:opacity-60"
+                    >
+                      {modelBusy ? "Loading local model..." : "Download/load model to start"}
+                    </button>
+                    <span className="ml-3 text-xs opacity-75">{modelRun.error ?? modelRun.message}</span>
                   </div>
                 )}
-
-                <div className="grid gap-3 lg:grid-cols-2">
-                  <div className="rounded-[24px] bg-black/[0.035] p-4 dark:bg-white/[0.05]">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><MessageSquareText className="h-4 w-4" /> Activity</div>
-                    <div className="space-y-2">
-                      {visibleEvents.map((event) => (
-                        <div key={event.id} className="rounded-2xl bg-white/70 p-3 text-xs leading-relaxed dark:bg-black/20">
-                          <div className="flex items-center justify-between gap-2 font-semibold">
-                            <span>{event.title}</span>
-                            <span className="uppercase tracking-[0.12em] opacity-60">{event.status}</span>
-                          </div>
-                          <p className="mt-1 opacity-70">{event.detail}</p>
-                          {event.approvalRequired && (
-                            <button type="button" onClick={() => void handleReviewSecret(event.id)} className="mt-2 rounded-full border border-black/10 px-3 py-1 font-semibold dark:border-white/10">Approve once</button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-[24px] bg-black/[0.035] p-4 dark:bg-white/[0.05]">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><Diff className="h-4 w-4" /> File changes</div>
-                    <div className="space-y-2">
-                      {visibleDiffs.map((diff) => (
-                        <div key={diff.id} className="rounded-2xl bg-white/70 p-3 text-xs leading-relaxed dark:bg-black/20">
-                          <div className="font-semibold">{diff.filePath}</div>
-                          <p className="mt-1 opacity-70">{diff.summary}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
               </div>
             </ScrollArea>
 

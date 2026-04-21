@@ -21,7 +21,7 @@ export const DEFAULT_CAPABILITIES: LocalAgentCapability[] = [
   },
   {
     id: "indexeddb",
-    label: "IndexedDB storage",
+    label: "Browser storage",
     status: "checking",
     detail: "Sessions, logs, diffs, approvals, and retrieval indexes stay browser-local.",
   },
@@ -57,7 +57,7 @@ export const DEFAULT_FOLDERS: LocalAgentFolderSummary[] = [
 export const DEFAULT_EVENTS: LocalAgentToolEvent[] = [
   {
     id: "diagnostics",
-    title: "Readiness diagnostics queued",
+    title: "Diagnostics queued",
     detail: "Browser, WebGPU, storage, CPU, and memory signals are checked before model selection.",
     status: "queued",
   },

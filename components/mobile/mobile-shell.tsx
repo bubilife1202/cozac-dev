@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { RecentsProvider } from "@/lib/recents-context";
 import { NotesApp } from "@/components/apps/notes/notes-app";
 import { MessagesApp } from "@/components/apps/messages/messages-app";
+import { LocalAiApp } from "@/components/apps/local-ai/local-ai-app";
 import { SettingsApp } from "@/components/apps/settings/settings-app";
 import { ITermApp } from "@/components/apps/iterm/iterm-app";
 import { FinderApp } from "@/components/apps/finder/finder-app";
@@ -151,6 +152,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
     let detectedApp: string | null = null;
     if (path.startsWith("/settings")) detectedApp = "settings";
     else if (path.startsWith("/messages")) detectedApp = "messages";
+    else if (path.startsWith("/local-ai")) detectedApp = "local-ai";
     else if (path.startsWith("/notes")) detectedApp = "notes";
     else if (path.startsWith("/iterm")) detectedApp = "iterm";
     else if (path.startsWith("/finder")) detectedApp = "finder";
@@ -529,6 +531,9 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
               )}
               {renderedApp === "messages" && (
                 <MessagesApp isMobile={true} inShell={false} />
+              )}
+              {renderedApp === "local-ai" && (
+                <LocalAiApp isMobile={true} inShell={false} />
               )}
               {renderedApp === "settings" && (
                 <SettingsApp isMobile={true} inShell={false} />

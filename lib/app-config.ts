@@ -35,6 +35,17 @@ export const APPS: AppConfig[] = [
     menuBarTitle: "Messages",
   },
   {
+    id: "local-ai",
+    name: "Local Agent",
+    icon: "/local-ai.svg",
+    description: "Browser-native local AI workbench",
+    accentColor: "#7C3AED",
+    defaultPosition: { x: 120, y: 50 },
+    defaultSize: { width: 1040, height: 720 },
+    minSize: { width: 720, height: 520 },
+    menuBarTitle: "Local Agent",
+  },
+  {
     id: "photos",
     name: "Photos",
     icon: "/photos.png",

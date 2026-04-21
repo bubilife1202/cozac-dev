@@ -11,6 +11,7 @@ import { Dock } from "./dock";
 import { Window } from "./window";
 import { NotesApp } from "@/components/apps/notes/notes-app";
 import { MessagesApp } from "@/components/apps/messages/messages-app";
+import { LocalAiApp } from "@/components/apps/local-ai/local-ai-app";
 import { SettingsApp } from "@/components/apps/settings/settings-app";
 import { ITermApp } from "@/components/apps/iterm/iterm-app";
 import { FinderApp, type SidebarItem as FinderTab } from "@/components/apps/finder/finder-app";
@@ -544,6 +545,10 @@ function DesktopContent({ initialNoteSlug, initialTextEditFile, initialPreviewFi
 
           <Window appId="messages">
             <MessagesApp inShell={true} focusModeActive={focusMode !== "off"} />
+          </Window>
+
+          <Window appId="local-ai">
+            <LocalAiApp inShell={true} />
           </Window>
 
           <Window appId="settings">

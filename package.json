@@ -9,7 +9,10 @@
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run build",
+    "test": "npm run test:local-ai",
+    "test:local-ai": "node scripts/test-local-ai.mjs",
+    "verify:local-ai": "node scripts/verify-local-ai-static.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.0.4",

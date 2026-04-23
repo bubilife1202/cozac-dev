@@ -166,7 +166,7 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
   const [startupPhase, setStartupPhase] = useState<StartupPhase>("ready");
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel | undefined>(undefined);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory | undefined>(undefined);
-  const [restoreDefaultOnUnlock, setRestoreDefaultOnUnlock] = useState(false);
+  const [restoreDefaultOnUnlock, setRestoreDefaultOnUnlock] = useState(!initialAppId);
   const [finderTab, setFinderTab] = useState<FinderTab | undefined>(undefined);
   const openedLobbyOnEntryRef = useRef(false);
   // Get TextEdit and Preview windows from window manager
@@ -307,6 +307,8 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
 
   // Update URL when focus changes
   useEffect(() => {
+    if (mode !== "active" || startupPhase !== "ready") return;
+
     const focusedWindowId = state.focusedWindowId;
     if (!focusedWindowId) return;
 
@@ -334,7 +336,7 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     } else {
       window.history.replaceState(null, "", `/${focusedAppId}`);
     }
-  }, [state.focusedWindowId, state.windows, initialNoteSlug]);
+  }, [mode, startupPhase, state.focusedWindowId, state.windows, initialNoteSlug]);
 
   const isActive = mode === "active";
 

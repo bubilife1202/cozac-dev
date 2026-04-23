@@ -52,7 +52,7 @@ function createMockTransformers(answer = "Mock local answer") {
   };
 }
 
-test("exposes the 270M Gemma model as the runnable smoke model while keeping larger tiers as future recommendations", () => {
+test("exposes the 270M Gemma model as the runnable smoke model while keeping Gemma 4 tiers as future recommendations", () => {
   const state = createLocalModelEngineState({
     fileSystemAccess: true,
     webGPU: true,
@@ -66,8 +66,8 @@ test("exposes the 270M Gemma model as the runnable smoke model while keeping lar
   assert.equal(state.cloudFallbackAvailable, false);
   assert.equal(state.runnableModel.modelId, RUNNABLE_LOCAL_MODEL_ID);
   assert.equal(state.runnableModel.status, "ready");
-  assert.equal(state.futureRecommendations.some((item) => item.tier === "gemma-3-2b"), true);
-  assert.equal(state.futureRecommendations.some((item) => item.tier === "gemma-3-4b"), true);
+  assert.equal(state.futureRecommendations.some((item) => item.tier === "gemma-4-e2b"), true);
+  assert.equal(state.futureRecommendations.some((item) => item.tier === "gemma-4-e4b"), true);
 });
 
 test("reports runnable model availability without requiring a cloud fallback", () => {

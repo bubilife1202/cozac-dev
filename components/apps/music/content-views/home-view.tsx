@@ -4,7 +4,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Playlist, PlaylistTrack } from "../types";
 import { useAudio } from "@/lib/music/audio-context";
-import { Play, Pause } from "lucide-react";
+import { ExternalLink, Play, Pause } from "lucide-react";
 
 interface HomeViewProps {
   playlists: Playlist[];
@@ -20,6 +20,12 @@ export function HomeView({
   isMobileView,
 }: HomeViewProps) {
   const { playbackState, play, pause } = useAudio();
+
+  const openExternalTrack = (track: PlaylistTrack) => {
+    if (typeof window !== "undefined" && track.externalUrl) {
+      window.open(track.externalUrl, "_blank", "noopener,noreferrer");
+    }
+  };
 
   const handlePlayPlaylist = (playlist: Playlist, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -103,10 +109,16 @@ export function HomeView({
               return (
                 <div
                   key={song.id}
-                  onClick={() => song.previewUrl && play(song, songs)}
+                  onClick={() => {
+                    if (song.previewUrl) {
+                      play(song, songs);
+                      return;
+                    }
+                    openExternalTrack(song);
+                  }}
                   className={cn(
                     "group flex-shrink-0 w-32",
-                    song.previewUrl && "cursor-pointer"
+                    (song.previewUrl || song.externalUrl) && "cursor-pointer"
                   )}
                 >
                   <div className="relative aspect-square rounded-lg overflow-hidden mb-2 bg-muted">
@@ -117,19 +129,21 @@ export function HomeView({
                       className="object-cover"
                       unoptimized
                     />
-                    {song.previewUrl && (
+                    {(song.previewUrl || song.externalUrl) && (
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                        {isPlaying ? (
+                        {song.previewUrl && isPlaying ? (
                           <Pause className="w-10 h-10 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                        ) : (
+                        ) : song.previewUrl ? (
                           <Play className="w-10 h-10 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        ) : (
+                          <ExternalLink className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                         )}
                       </div>
                     )}
                   </div>
                   <p className="text-sm font-medium truncate">{song.name}</p>
                   <p className="text-xs text-muted-foreground truncate">
-                    {song.artist}
+                    {song.externalUrl ? `${song.artist} · YouTube` : song.artist}
                   </p>
                 </div>
               );

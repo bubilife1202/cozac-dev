@@ -49,7 +49,7 @@ export interface LocalAgentDiffSummary {
 }
 
 export interface LocalAgentModelRecommendation {
-  tier: "270m" | "2b" | "4b" | "unsupported";
+  tier: "fallback" | "e2b" | "e4b" | "unsupported";
   label: string;
   reason: string;
   readiness: number;

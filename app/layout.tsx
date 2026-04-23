@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   creator: "Jinbae Park",
   publisher: "cozac.dev",
   icons: {
-    icon: "/lobby.svg",
+    icon: "/local-ai.svg",
   },
   openGraph: {
     type: "website",

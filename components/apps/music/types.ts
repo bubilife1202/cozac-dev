@@ -6,6 +6,7 @@ export interface PlaylistTrack {
   album: string;
   albumArt: string;
   previewUrl: string | null;
+  externalUrl?: string;
   duration: number; // in seconds
 }
 

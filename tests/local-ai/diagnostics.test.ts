@@ -33,7 +33,7 @@ test("recommends degraded 270M smoke mode when WebGPU is missing", () => {
   assert.equal(recommendation.tier, "gemma-3-270m-it");
 });
 
-test("keeps high capability WebGPU devices on the runnable 270M smoke model first", () => {
+test("recommends Gemma 4 E4B for high capability WebGPU devices", () => {
   const recommendation = recommendLocalModel({
     fileSystemAccess: true,
     webGPU: true,
@@ -45,10 +45,10 @@ test("keeps high capability WebGPU devices on the runnable 270M smoke model firs
   });
 
   assert.equal(recommendation.status, "ready");
-  assert.equal(recommendation.tier, "gemma-3-270m-it");
+  assert.equal(recommendation.tier, "gemma-4-e4b");
 });
 
-test("keeps midrange devices on the runnable 270M smoke model first", () => {
+test("recommends Gemma 4 E2B for midrange WebGPU devices", () => {
   const recommendation = recommendLocalModel({
     fileSystemAccess: true,
     webGPU: true,
@@ -60,5 +60,5 @@ test("keeps midrange devices on the runnable 270M smoke model first", () => {
   });
 
   assert.equal(recommendation.status, "ready");
-  assert.equal(recommendation.tier, "gemma-3-270m-it");
+  assert.equal(recommendation.tier, "gemma-4-e2b");
 });

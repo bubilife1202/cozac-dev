@@ -31,7 +31,6 @@ import type {
   LocalAgentModelRecommendation,
   LocalAgentToolEvent,
   LocalAgentFolderRole,
-  LocalAgentPermissionState,
   LocalAgentWorkbenchState,
 } from "./types";
 
@@ -48,13 +47,6 @@ const ROLE_COPY: Record<LocalAgentFolderRole, { label: string; description: stri
     label: "Output",
     description: "Drafts and generated files; never auto-created as hidden project state.",
   },
-};
-
-const PERMISSION_COPY: Record<LocalAgentPermissionState, string> = {
-  granted: "Granted",
-  prompt: "Needs selection",
-  denied: "Denied",
-  unknown: "Unknown",
 };
 
 function mergeWorkbenchState(state?: Partial<LocalAgentWorkbenchState>): LocalAgentWorkbenchState {
@@ -104,13 +96,16 @@ function capabilityStatus(ready: boolean, partial = false): LocalAgentCapability
 }
 
 function toUiModelRecommendation(recommendation: ReturnType<typeof recommendLocalModel>): LocalAgentModelRecommendation {
-  const readiness = recommendation.tier === "gemma-3-270m-it"
-    ? recommendation.status === "ready" ? 62 : 46
-    : recommendation.tier === "gemma-3-4b" ? 82
-      : recommendation.status === "ready" ? 58 : recommendation.status === "degraded" ? 38 : 8;
+  const readiness = recommendation.tier === "gemma-4-e4b"
+    ? 86
+    : recommendation.tier === "gemma-4-e2b"
+      ? 72
+      : recommendation.tier === "gemma-3-270m-it"
+        ? recommendation.status === "ready" ? 48 : 34
+        : 8;
 
   return {
-    tier: recommendation.tier === "gemma-3-4b" ? "4b" : recommendation.tier === "gemma-3-2b" ? "2b" : recommendation.tier === "gemma-3-270m-it" ? "270m" : "unsupported",
+    tier: recommendation.tier === "gemma-4-e4b" ? "e4b" : recommendation.tier === "gemma-4-e2b" ? "e2b" : recommendation.tier === "gemma-3-270m-it" ? "fallback" : "unsupported",
     label: recommendation.label,
     reason: recommendation.reasons.join(" "),
     readiness,
@@ -120,12 +115,14 @@ function toUiModelRecommendation(recommendation: ReturnType<typeof recommendLoca
 function createCapabilityCards(): {
   capabilities: LocalAgentWorkbenchState["capabilities"];
   recommendation: LocalAgentModelRecommendation;
+  signals: ReturnType<typeof probeLocalAiCapabilities>;
 } {
   const signals = probeLocalAiCapabilities();
   const recommendation = recommendLocalModel(signals);
 
   return {
     recommendation: toUiModelRecommendation(recommendation),
+    signals,
     capabilities: [
       {
         id: "fs-access",
@@ -155,7 +152,7 @@ function createCapabilityCards(): {
         id: "device",
         label: `${signals.browserName} on ${signals.osHint}`,
         status: signals.webGPU ? "supported" : "partial",
-        detail: `${signals.cpuCores ?? "unknown"} CPU cores, ${signals.memoryGB ?? "unknown"} GB memory signal.`,
+        detail: `${signals.cpuCores ?? "unknown"} CPU cores, ${typeof signals.memoryGB === "number" ? `${signals.memoryGB} GB memory signal` : "desktop browser does not expose exact RAM"}.`,
       },
       {
         id: "commands",
@@ -164,6 +161,69 @@ function createCapabilityCards(): {
         detail: "Version 1 intentionally rejects npm, git, python, ollama, sudo, and shell requests.",
       },
     ],
+  };
+}
+
+type DeviceSuitability = {
+  verdict: "good" | "mixed" | "blocked";
+  headline: string;
+  body: string;
+  chips: string[];
+};
+
+function buildDeviceSuitability(
+  signals: ReturnType<typeof probeLocalAiCapabilities>,
+  recommendation: LocalAgentModelRecommendation,
+): DeviceSuitability {
+  const chips = [
+    `${signals.browserName} · ${signals.osHint}`,
+    `${signals.cpuCores ?? "?"} CPU cores`,
+    typeof signals.memoryGB === "number" ? `${signals.memoryGB} GB memory signal` : "RAM hidden by browser",
+    signals.webGPU ? "WebGPU on" : "WebGPU off",
+    signals.fileSystemAccess ? "Folder access on" : "Folder access off",
+  ];
+
+  if (!signals.fileSystemAccess || !signals.indexedDB) {
+    return {
+      verdict: "blocked",
+      headline: "로컬 폴더/저장소 권한이 먼저 필요합니다",
+      body: "이 브라우저에서는 폴더 선택이나 브라우저 저장소가 막혀 있어서 Local Agent를 제대로 쓸 수 없습니다.",
+      chips,
+    };
+  }
+
+  if (recommendation.tier === "e4b") {
+    return {
+      verdict: "good",
+      headline: "Gemma 4 E4B 기준으로 적합합니다",
+      body: "현재 브라우저 신호상 Gemma 4 E4B를 목표 모델로 잡는 편이 맞습니다. 다만 실제 브라우저 다운로드 경로는 아직 더 작은 fallback runtime을 사용합니다.",
+      chips,
+    };
+  }
+
+  if (recommendation.tier === "e2b") {
+    return {
+      verdict: "mixed",
+      headline: "Gemma 4 E2B 쪽이 더 안전합니다",
+      body: "WebGPU는 되지만 하드웨어 여유가 넉넉하다고 보기 어려워서, Gemma 4에서는 E2B가 먼저입니다.",
+      chips,
+    };
+  }
+
+  if (signals.webGPU) {
+    return {
+      verdict: "mixed",
+      headline: "Gemma 4보다는 fallback runtime이 먼저입니다",
+      body: "브라우저에서는 현재 Gemma 3 270M fallback을 먼저 쓰고, Gemma 4는 더 무거운 로컬 런타임으로 준비하는 게 맞습니다.",
+      chips,
+    };
+  }
+
+  return {
+    verdict: "blocked",
+    headline: "이 브라우저에서는 Gemma 4가 무겁습니다",
+    body: "WebGPU가 없어서 현재는 Gemma 3 270M fallback만 현실적입니다.",
+    chips,
   };
 }
 
@@ -182,10 +242,10 @@ type ChatMessage = {
 };
 
 const RUNNABLE_LOCAL_MODEL_ID = "onnx-community/gemma-3-270m-it-ONNX";
-const RUNNABLE_LOCAL_MODEL_LABEL = "Gemma 3 270M local smoke model";
-const BETTER_LOCAL_MODEL_LABEL = "Gemma 3n E2B";
+const RUNNABLE_LOCAL_MODEL_LABEL = "Gemma 3 270M browser fallback";
+const PRIMARY_LOCAL_MODEL_LABEL = "Gemma 4 E4B";
 
-type ModelTier = "fast" | "better";
+type ModelTier = "recommended" | "fallback";
 
 const MODEL_TIERS: Array<{
   id: ModelTier;
@@ -196,19 +256,19 @@ const MODEL_TIERS: Array<{
   icon: typeof Zap;
 }> = [
   {
-    id: "fast",
-    label: "Fast",
-    model: "Gemma 3 270M",
-    description: "Small browser runtime fallback",
-    icon: Zap,
+    id: "recommended",
+    label: "Recommended",
+    model: PRIMARY_LOCAL_MODEL_LABEL,
+    description: "Gemma 4 target for stronger Macs",
+    badge: "Gemma 4",
+    icon: Atom,
   },
   {
-    id: "better",
-    label: "Better",
-    model: BETTER_LOCAL_MODEL_LABEL,
-    description: "Recommended advanced local model",
-    badge: "Advanced",
-    icon: Atom,
+    id: "fallback",
+    label: "Fallback",
+    model: "Gemma 3 270M",
+    description: "Current browser download/runtime path",
+    icon: Zap,
   },
 ];
 
@@ -396,18 +456,30 @@ export function LocalAgentApp({
   const externalWorkbench = useMemo(() => mergeWorkbenchState(state), [state]);
   const [workbench, setWorkbench] = useState<LocalAgentWorkbenchState>(externalWorkbench);
   const [selectedRole, setSelectedRole] = useState<LocalAgentFolderRole>("code");
-  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("better");
+  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("recommended");
   const [prompt, setPrompt] = useState("");
   const [adapterNotice, setAdapterNotice] = useState<string | null>(null);
+  const [deviceSuitability, setDeviceSuitability] = useState<DeviceSuitability>(() =>
+    buildDeviceSuitability(
+      probeLocalAiCapabilities({
+        fileSystemAccess: false,
+        indexedDB: false,
+        webGPU: false,
+        browserName: "Unknown browser",
+        osHint: "Unknown OS",
+      }),
+      DEFAULT_MODEL_RECOMMENDATION,
+    ),
+  );
   const [modelRun, setModelRun] = useState<LocalModelUiState>({
     status: "idle",
-    message: `${RUNNABLE_LOCAL_MODEL_LABEL} is ready to download into this browser tab.`,
+    message: `${RUNNABLE_LOCAL_MODEL_LABEL} is the current browser download path for Local Agent.`,
   });
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "initial-greeting",
       role: "assistant",
-      text: "안녕하세요. 여기서는 로컬 모델과 바로 대화하면 됩니다.\n필요하면 왼쪽에서 모델을 다운로드하고, 폴더 접근은 직접 선택할 때만 열립니다.",
+      text: "안녕하세요. 여기서는 Gemma 4 기준 적합도를 먼저 보고, 필요하면 브라우저 fallback runtime을 다운로드한 뒤 대화할 수 있습니다.\n파일 작업 전에는 Code / Materials / Output 폴더를 직접 지정하세요.",
       timestamp: "11:52 AM",
     },
   ]);
@@ -427,12 +499,13 @@ export function LocalAgentApp({
   useEffect(() => {
     if (state) return;
 
-    const { capabilities, recommendation } = createCapabilityCards();
+    const { capabilities, recommendation, signals } = createCapabilityCards();
     setWorkbench((current) => ({
       ...current,
       capabilities,
       modelRecommendation: recommendation,
     }));
+    setDeviceSuitability(buildDeviceSuitability(signals, recommendation));
 
 
     void openLocalAiDatabase()
@@ -449,6 +522,8 @@ export function LocalAgentApp({
     () => workbench.folders.find((folder) => folder.role === selectedRole) ?? workbench.folders[0],
     [selectedRole, workbench.folders]
   );
+  const hasGrantedFolder = workbench.folders.some((folder) => folder.permission === "granted");
+  const allFoldersSelected = workbench.folders.every((folder) => folder.permission === "granted");
 
 
   const persistRecord = useCallback((storeName: "toolEvents" | "diffs" | "diagnostics", record: Record<string, unknown> & { id: string }) => {
@@ -640,7 +715,7 @@ export function LocalAgentApp({
       setModelRun((current) => ({
         ...current,
         status: "ready",
-        message: `${RUNNABLE_LOCAL_MODEL_LABEL} is loaded locally. Prompts now generate in this browser tab.`,
+        message: `${RUNNABLE_LOCAL_MODEL_LABEL} is loaded locally. This is the current browser fallback runtime for Local Agent.`,
         progress: 100,
         error: undefined,
       }));
@@ -873,6 +948,14 @@ export function LocalAgentApp({
                 {MODEL_TIERS.map((tier) => {
                   const selected = selectedModelTier === tier.id;
                   const Icon = tier.icon;
+                  const displayModel =
+                    tier.id === "recommended"
+                      ? workbench.modelRecommendation.label.replace(/\s+(recommended|likely suitable)$/i, "")
+                      : tier.model;
+                  const displayDescription =
+                    tier.id === "recommended"
+                      ? workbench.modelRecommendation.reason
+                      : tier.description;
                   return (
                     <button
                       key={tier.id}
@@ -889,14 +972,14 @@ export function LocalAgentApp({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2 whitespace-nowrap text-[15px] font-semibold tracking-[-0.03em] text-[#1c1b19]">
-                          {tier.label} — {tier.model}
+                          {tier.label} — {displayModel}
                           {tier.badge && (
                             <span className="rounded-[7px] bg-[#f3ebdf] px-1.5 py-1 text-[11px] font-medium text-[#8a683c]">
                               {tier.badge}
                             </span>
                           )}
                         </span>
-                        <span className="mt-1 block text-sm text-[#5f5b55]">{tier.description}</span>
+                        <span className="mt-1 block text-sm text-[#5f5b55]">{displayDescription}</span>
                       </span>
                       {selected && (
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1f1e1b] text-white">
@@ -907,6 +990,30 @@ export function LocalAgentApp({
                   );
                 })}
               </div>
+              <div
+                className={cn(
+                  "mt-4 rounded-[16px] border px-4 py-3",
+                  deviceSuitability.verdict === "good"
+                    ? "border-emerald-200 bg-emerald-50/80"
+                    : deviceSuitability.verdict === "mixed"
+                      ? "border-amber-200 bg-amber-50/80"
+                      : "border-rose-200 bg-rose-50/80",
+                )}
+              >
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7d776f]">This device</div>
+                <div className="mt-1 text-[15px] font-semibold text-[#1d1c1a]">{deviceSuitability.headline}</div>
+                <p className="mt-1 text-sm leading-relaxed text-[#5f5b55]">{deviceSuitability.body}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {deviceSuitability.chips.map((chip) => (
+                    <span
+                      key={chip}
+                      className="rounded-full border border-[#e5ddd2] bg-white/80 px-2.5 py-1 text-[11px] font-medium text-[#615b54]"
+                    >
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => void handleLoadModel().catch(() => undefined)}
@@ -914,8 +1021,11 @@ export function LocalAgentApp({
                 className="mt-4 flex min-h-[58px] w-full items-center justify-center gap-3 rounded-[16px] bg-[#24221f] px-4 py-3 text-[16px] font-semibold text-white transition hover:scale-[1.01] hover:bg-[#171613] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-5 w-5" />
-                {modelReady ? "Reload model" : modelBusy ? "Downloading model..." : "Download model"}
+                {modelReady ? "Reload browser fallback" : modelBusy ? "Downloading browser fallback..." : "Download browser fallback"}
               </button>
+              <p className="mt-2 text-xs leading-relaxed text-[#706a62]">
+                Current browser runtime: {RUNNABLE_LOCAL_MODEL_LABEL}. Gemma 4 is shown here as the target tier and suitability decision for this device.
+              </p>
               {(modelRun.status === "loading" || modelRun.status === "generating" || modelRun.status === "error") && (
                 <div className="mt-3 rounded-[14px] bg-[#f5f1ea] p-3 text-xs leading-relaxed text-[#69635c]">
                   <div className="flex items-center justify-between gap-3 font-medium uppercase tracking-[0.12em]">
@@ -934,6 +1044,34 @@ export function LocalAgentApp({
 
             <section className="mt-7 border-t border-[#e3ded7] pt-5">
               <div className="mb-3 text-lg font-medium tracking-[-0.02em] text-[#1d1c1a]">Workspace</div>
+              <div className="mb-3 rounded-[16px] border border-[#e7e2dc] bg-white px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7d776f]">Local folders</div>
+                <p className="mt-1 text-sm leading-relaxed text-[#5f5b55]">
+                  파일 작업은 여기서 직접 지정한 로컬 폴더만 사용합니다. Code / Materials / Output 폴더를 각각 눈에 보이게 선택할 수 있어야 합니다.
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {workbench.folders.map((folder) => (
+                    <button
+                      key={`${folder.id}-selector`}
+                      type="button"
+                      onClick={() => void handleSelectFolder(folder.role)}
+                      className="flex items-center justify-between rounded-[12px] border border-[#e7e2dc] bg-[#fcfbf8] px-3 py-2.5 text-left text-sm font-medium text-[#2a2722] transition hover:bg-white"
+                    >
+                      <span>{folder.permission === "granted" ? `Change ${ROLE_COPY[folder.role].label} folder` : `Select ${ROLE_COPY[folder.role].label} folder`}</span>
+                      <span className="text-xs uppercase tracking-[0.12em] text-[#8c877f]">
+                        {folder.permission === "granted" ? "selected" : "required"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs leading-relaxed text-[#706a62]">
+                  {allFoldersSelected
+                    ? "All local folders are assigned."
+                    : hasGrantedFolder
+                      ? "At least one local folder is assigned. Add the rest for a complete local workspace."
+                      : "No local folder is assigned yet."}
+                </p>
+              </div>
               <div className="grid gap-2">
                 {workbench.folders.map((folder) => {
                   const selected = selectedRole === folder.role;
@@ -956,11 +1094,12 @@ export function LocalAgentApp({
                       <span className="min-w-0 flex-1">
                         <span className="block text-[16px] font-semibold tracking-[-0.02em]">{ROLE_COPY[folder.role].label}</span>
                         <span className="mt-0.5 block truncate text-sm text-[#5f5b55]">{folder.name}</span>
+                        <span className="mt-1 block text-xs text-[#8a837b]">{ROLE_COPY[folder.role].description}</span>
                       </span>
                       <div className="flex items-center gap-2">
-                        {folder.permission !== "prompt" && (
-                          <span className="text-[10px] uppercase tracking-[0.12em] text-[#8c877f]">{PERMISSION_COPY[folder.permission]}</span>
-                        )}
+                        <span className="text-[10px] uppercase tracking-[0.12em] text-[#8c877f]">
+                          {folder.permission === "granted" ? "Selected" : "Select folder"}
+                        </span>
                         <ChevronRight className="h-5 w-5 text-[#4f4a44]" />
                       </div>
                     </button>
@@ -1059,6 +1198,9 @@ export function LocalAgentApp({
                   <Send className="h-6 w-6" />
                 </button>
               </div>
+              <p className="mt-3 text-xs leading-relaxed text-[#7a746d]">
+                대화는 바로 가능하지만, 코드/문서/출력 파일 작업은 위에서 로컬 폴더를 먼저 지정해야 합니다.
+              </p>
             </div>
           </section>
         </main>

@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { getOptionalServerClient } from "@/utils/supabase/server";
 
 function getSafeNextPath(value: string | null): string {
-  if (!value) return "/lobby";
-  if (!value.startsWith("/")) return "/lobby";
+  if (!value) return "/";
+  if (!value.startsWith("/")) return "/";
 
-  if (value.startsWith("//")) return "/lobby";
+  if (value.startsWith("//")) return "/";
 
   return value;
 }
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const supabase = await getOptionalServerClient();
     if (!supabase) {
       return NextResponse.redirect(
-        new URL("/lobby?auth=unavailable", requestUrl.origin)
+        new URL("/?auth=unavailable", requestUrl.origin)
       );
     }
 
@@ -41,5 +41,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(new URL("/lobby?auth=oauth_error", requestUrl.origin));
+  return NextResponse.redirect(new URL("/?auth=oauth_error", requestUrl.origin));
 }

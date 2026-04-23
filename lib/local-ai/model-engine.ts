@@ -35,21 +35,21 @@ export type RunnableLocalModelAvailability = {
 };
 
 export type FutureLocalModelRecommendation = {
-  tier: "gemma-3-2b" | "gemma-3-4b";
+  tier: "gemma-4-e2b" | "gemma-4-e4b";
   label: string;
   reason: string;
 };
 
 export const LOCAL_AI_FUTURE_MODEL_RECOMMENDATIONS = [
   {
-    tier: "gemma-3-2b",
-    label: "Gemma 3 2B-class recommendation",
-    reason: "Keep as a future browser-local upgrade after the 270M smoke path is proven.",
+    tier: "gemma-4-e2b",
+    label: "Gemma 4 E2B recommendation",
+    reason: "Use as the lighter Gemma 4 path when WebGPU is available but memory headroom looks limited.",
   },
   {
-    tier: "gemma-3-4b",
-    label: "Gemma 3 4B-class recommendation",
-    reason: "Use only for high-memory WebGPU devices after explicit model-package verification.",
+    tier: "gemma-4-e4b",
+    label: "Gemma 4 E4B recommendation",
+    reason: "Use as the main on-device target on stronger Macs after explicit model-package verification.",
   },
 ] as const satisfies readonly FutureLocalModelRecommendation[];
 

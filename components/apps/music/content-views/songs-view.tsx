@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlaylistTrack } from "../types";
 import { useAudio } from "@/lib/music/audio-context";
-import { Play, Pause } from "lucide-react";
+import { ExternalLink, Play, Pause } from "lucide-react";
 import { formatDuration } from "@/lib/music/utils";
 
 interface SongsViewProps {
@@ -16,7 +16,18 @@ interface SongsViewProps {
 export function SongsView({ songs, isMobileView }: SongsViewProps) {
   const { playbackState, play, pause, resume } = useAudio();
 
+  const openExternalTrack = (track: PlaylistTrack) => {
+    if (typeof window !== "undefined" && track.externalUrl) {
+      window.open(track.externalUrl, "_blank", "noopener,noreferrer");
+    }
+  };
+
   const handleTrackPlay = (track: PlaylistTrack) => {
+    if (!track.previewUrl) {
+      openExternalTrack(track);
+      return;
+    }
+
     if (playbackState.currentTrack?.id === track.id && playbackState.isPlaying) {
       pause();
     } else if (playbackState.currentTrack?.id === track.id) {
@@ -68,10 +79,12 @@ export function SongsView({ songs, isMobileView }: SongsViewProps) {
                   >
                     {isPlaying ? (
                       <Pause className="w-4 h-4 mx-auto" />
+                    ) : !track.previewUrl ? (
+                      <ExternalLink className="w-4 h-4 mx-auto" />
                     ) : (
                       <span className="group-hover:hidden">{index + 1}</span>
                     )}
-                    {!isPlaying && (
+                    {!isPlaying && track.previewUrl && (
                       <Play className="w-4 h-4 mx-auto hidden group-hover:block" />
                     )}
                   </span>
@@ -94,7 +107,7 @@ export function SongsView({ songs, isMobileView }: SongsViewProps) {
                       {track.name}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {track.artist}
+                      {track.externalUrl ? `${track.artist} · YouTube` : track.artist}
                     </p>
                   </div>
                   {!isMobileView && (

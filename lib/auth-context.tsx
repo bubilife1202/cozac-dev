@@ -27,9 +27,9 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function getSafeNextPath(value: string | undefined): string {
-  if (!value) return "/lobby";
-  if (!value.startsWith("/")) return "/lobby";
-  if (value.startsWith("//")) return "/lobby";
+  if (!value) return "/";
+  if (!value.startsWith("/")) return "/";
+  if (value.startsWith("//")) return "/";
   return value;
 }
 

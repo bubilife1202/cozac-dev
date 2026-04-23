@@ -84,23 +84,47 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
     return {
       tier: "gemma-3-270m-it",
       status: "degraded",
-      label: "Gemma 3 270M local smoke model",
-      reasons: ["WebGPU is unavailable; use the runnable 270M ONNX model on WASM before recommending larger future models."],
+      label: "Gemma 3 270M browser fallback",
+      reasons: ["WebGPU is unavailable; keep the current browser runtime on the runnable 270M ONNX fallback before attempting Gemma 4."],
     };
   }
 
   if (cpuCores >= 8 && memoryGB >= 12) {
-    reasons.push("WebGPU is available with enough CPU and memory signal to consider 2B/4B future upgrades after the 270M smoke model works.");
-  } else if (cpuCores >= 4 && memoryGB >= 6) {
-    reasons.push("WebGPU is available; keep 2B as a future recommendation and run 270M first.");
+    reasons.push("WebGPU, CPU cores, and browser memory signal are strong enough to target Gemma 4 E4B on this device.");
+    return {
+      tier: "gemma-4-e4b",
+      status: "ready",
+      label: "Gemma 4 E4B recommended",
+      reasons,
+    };
+  }
+
+  if (cpuCores >= 8 && memoryGB === 0) {
+    reasons.push("The browser does not expose exact RAM, but WebGPU and high CPU signal make Gemma 4 E4B the best fit to try first.");
+    return {
+      tier: "gemma-4-e4b",
+      status: "ready",
+      label: "Gemma 4 E4B likely suitable",
+      reasons,
+    };
+  }
+
+  if (cpuCores >= 4 && memoryGB >= 6) {
+    reasons.push("WebGPU is available, but the browser-reported hardware envelope points to Gemma 4 E2B before E4B.");
+    return {
+      tier: "gemma-4-e2b",
+      status: "ready",
+      label: "Gemma 4 E2B recommended",
+      reasons,
+    };
   } else {
-    reasons.push("Device CPU or memory signal is low or unavailable; run the 270M smoke model before any larger recommendation.");
+    reasons.push("Device CPU or memory signal is too thin for Gemma 4 in-browser. Keep the 270M fallback as the current runtime.");
   }
 
   return {
     tier: "gemma-3-270m-it",
     status: "ready",
-    label: "Gemma 3 270M local smoke model",
+    label: "Gemma 3 270M browser fallback",
     reasons,
   };
 }

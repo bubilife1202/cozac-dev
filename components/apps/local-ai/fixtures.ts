@@ -68,8 +68,8 @@ export const DEFAULT_DIFFS: LocalAgentDiffSummary[] = [
 ];
 
 export const DEFAULT_MODEL_RECOMMENDATION: LocalAgentModelRecommendation = {
-  tier: "270m",
-  label: "Gemma 3 270M local smoke model",
-  reason: "Download and run the practical ONNX smoke model first; keep 2B/4B as future recommendations.",
-  readiness: 58,
+  tier: "e4b",
+  label: "Gemma 4 E4B recommended",
+  reason: "Use Gemma 4 E4B as the target local model on stronger laptops, while the browser download path stays on the smaller fallback runtime.",
+  readiness: 84,
 };

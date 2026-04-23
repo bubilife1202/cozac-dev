@@ -11,7 +11,6 @@ import { FinderApp } from "@/components/apps/finder/finder-app";
 import { PhotosApp } from "@/components/apps/photos/photos-app";
 import { CalendarApp } from "@/components/apps/calendar/calendar-app";
 import { MusicApp } from "@/components/apps/music/music-app";
-import { LobbyApp } from "@/components/apps/lobby/lobby-app";
 import { TextEditApp } from "@/components/apps/textedit";
 import { PreviewApp, type PreviewFileType } from "@/components/apps/preview";
 import { getTextEditContent } from "@/lib/file-storage";
@@ -159,7 +158,6 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
     else if (path.startsWith("/photos")) detectedApp = "photos";
     else if (path.startsWith("/calendar")) detectedApp = "calendar";
     else if (path.startsWith("/music")) detectedApp = "music";
-    else if (path.startsWith("/lobby")) detectedApp = "lobby";
     else if (path.startsWith("/textedit")) detectedApp = "textedit";
     else if (path.startsWith("/preview")) detectedApp = "preview";
     else if (initialApp) detectedApp = initialApp;
@@ -551,9 +549,6 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
                 <CalendarApp isMobile={true} inShell={false} />
               )}
               {renderedApp === "music" && <MusicApp isMobile={true} />}
-              {renderedApp === "lobby" && (
-                <LobbyApp isMobile={true} inShell={false} />
-              )}
               {renderedApp === "textedit" &&
                 (() => {
                   const filePath = topmostTextEdit?.filePath;
@@ -579,7 +574,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
               )}
             </div>
             <IOSHomeIndicator
-              variant={renderedApp === "lobby" ? "light" : "dark"}
+              variant="dark"
               onGoHome={handleGoHome}
               position="inline"
             />

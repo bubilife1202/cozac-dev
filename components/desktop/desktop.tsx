@@ -18,7 +18,6 @@ import { FinderApp, type SidebarItem as FinderTab } from "@/components/apps/find
 import { PhotosApp } from "@/components/apps/photos/photos-app";
 import { CalendarApp } from "@/components/apps/calendar/calendar-app";
 import { MusicApp } from "@/components/apps/music/music-app";
-import { LobbyApp } from "@/components/apps/lobby/lobby-app";
 import { TextEditWindow } from "@/components/apps/textedit";
 import { PreviewWindow, PREVIEW_TITLE_BAR_HEIGHT, type PreviewFileType } from "@/components/apps/preview";
 import { getPreviewMetadataFromPath } from "@/lib/preview-utils";
@@ -168,7 +167,6 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory | undefined>(undefined);
   const [restoreDefaultOnUnlock, setRestoreDefaultOnUnlock] = useState(!initialAppId);
   const [finderTab, setFinderTab] = useState<FinderTab | undefined>(undefined);
-  const openedLobbyOnEntryRef = useRef(false);
   // Get TextEdit and Preview windows from window manager
   const textEditWindows = getWindowsByApp("textedit");
   const previewWindows = getWindowsByApp("preview");
@@ -504,21 +502,6 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     setStartupPhase("ready");
   }, [startupPhase, authLoading, user, initialAppId]);
 
-  useEffect(() => {
-    if (startupPhase !== "ready") return;
-    if (!user) return;
-    if (openedLobbyOnEntryRef.current) return;
-    if (typeof window === "undefined") return;
-    if (window.location.pathname !== "/") return;
-
-    if (!DESKTOP_DEFAULT_FOCUSED_APP) return;
-
-    openedLobbyOnEntryRef.current = true;
-    openWindow(DESKTOP_DEFAULT_FOCUSED_APP);
-    focusWindow(DESKTOP_DEFAULT_FOCUSED_APP);
-    window.history.replaceState(null, "", `/${DESKTOP_DEFAULT_FOCUSED_APP}`);
-  }, [startupPhase, user, openWindow, focusWindow]);
-
   return (
     <div className="fixed inset-0">
       <Image
@@ -576,10 +559,6 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
 
           <Window appId="music">
             <MusicApp />
-          </Window>
-
-          <Window appId="lobby">
-            <LobbyApp inShell={true} />
           </Window>
 
           {/* TextEdit - multi-window support */}

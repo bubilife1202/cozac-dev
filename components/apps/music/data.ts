@@ -1059,6 +1059,34 @@ export const DEFAULT_PLAYLISTS: Playlist[] = [
       },
     ],
   },
+  {
+    id: "frieren-youtube-saves",
+    name: "📺",
+    description: "Saved YouTube videos",
+    coverArt: "https://i.ytimg.com/vi/KvbX4Az2P_4/maxresdefault.jpg",
+    tracks: [
+      {
+        id: "yt1",
+        name: "매일 집중이 필요할 때 듣는 판타지 음악",
+        artist: "Frieren 🌿",
+        album: "Fantasy Study Music",
+        albumArt: "https://i.ytimg.com/vi/KvbX4Az2P_4/maxresdefault.jpg",
+        previewUrl: null,
+        externalUrl: "https://www.youtube.com/watch?v=KvbX4Az2P_4",
+        duration: 5667,
+      },
+      {
+        id: "yt2",
+        name: "어서 오세요, 판타지 세계에",
+        artist: "Frieren 🌿",
+        album: "Fantasy Study Music",
+        albumArt: "https://i.ytimg.com/vi/8nPcrz4mZQM/maxresdefault.jpg",
+        previewUrl: null,
+        externalUrl: "https://www.youtube.com/watch?v=8nPcrz4mZQM&t=21s",
+        duration: 9535,
+      },
+    ],
+  },
 ];
 
 // Get all unique albums from playlists

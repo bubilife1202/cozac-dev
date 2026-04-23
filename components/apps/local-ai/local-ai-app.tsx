@@ -196,7 +196,7 @@ function buildDeviceSuitability(
     return {
       verdict: "good",
       headline: "Gemma 4 E4B 기준으로 적합합니다",
-      body: "현재 브라우저 신호상 Gemma 4 E4B를 목표 모델로 잡는 편이 맞습니다. 다만 실제 브라우저 다운로드 경로는 아직 더 작은 fallback runtime을 사용합니다.",
+      body: "현재 브라우저 신호상 Gemma 4 E4B를 목표 모델로 잡는 편이 맞습니다. 다만 실제 브라우저 준비 경로는 아직 더 가벼운 호환 엔진을 사용합니다.",
       chips,
     };
   }
@@ -551,7 +551,7 @@ export function LocalAgentApp({
     {
       id: "initial-greeting",
       role: "assistant",
-      text: "안녕하세요. 여기서는 Gemma 4 기준 적합도를 먼저 보고, 필요하면 브라우저 fallback runtime을 다운로드한 뒤 대화할 수 있습니다.\n파일 작업 전에는 Code / Materials / Output 폴더를 직접 지정하세요.",
+      text: "안녕하세요. 여기서는 Gemma 4 기준 적합도를 먼저 보고, 필요하면 로컬 런타임을 준비한 뒤 대화할 수 있습니다.\n파일 작업 전에는 Code / Materials / Output 폴더를 직접 지정하세요.",
       timestamp: "11:52 AM",
     },
   ]);
@@ -1095,7 +1095,7 @@ export function LocalAgentApp({
                 {modelReady ? "Reload local runtime" : modelBusy ? "Preparing local runtime..." : "Prepare local runtime"}
               </button>
               <p className="mt-2 text-xs leading-relaxed text-[#706a62]">
-                Gemma 4 series are shown here for device fit and model selection. The browser-side runtime is still using a lightweight compatibility path during rollout.
+                Gemma 4 series are shown here for device fit and model selection. The browser-side runtime is still using a lightweight compatibility engine during rollout.
               </p>
               {(modelRun.status === "loading" || modelRun.status === "generating" || modelRun.status === "error") && (
                 <div className="mt-3 rounded-[14px] bg-[#f5f1ea] p-3 text-xs leading-relaxed text-[#69635c]">

@@ -243,6 +243,10 @@ export function Dock({ onTrashClick, onFinderClick }: DockProps) {
     } else {
       openWindow(appId);
     }
+
+    if (!app?.multiWindow) {
+      window.history.replaceState(null, "", `/${appId}`);
+    }
   };
 
   const handleTrashClick = () => {

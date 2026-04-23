@@ -162,8 +162,8 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     const timers = touchTimers.current;
     return () => Object.values(timers).forEach(clearTimeout);
   }, []);
-  const [mode, setMode] = useState<DesktopMode>("active");
-  const [startupPhase, setStartupPhase] = useState<StartupPhase>("auth");
+  const [mode, setMode] = useState<DesktopMode>(initialAppId ? "active" : "locked");
+  const [startupPhase, setStartupPhase] = useState<StartupPhase>("ready");
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel | undefined>(undefined);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory | undefined>(undefined);
   const [restoreDefaultOnUnlock, setRestoreDefaultOnUnlock] = useState(false);
@@ -473,15 +473,18 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     if (restoreDefaultOnUnlock) {
       restoreDesktopDefault();
       setRestoreDefaultOnUnlock(false);
-      // Update URL to match default focused app.
-      window.history.replaceState(null, "", `/${DESKTOP_DEFAULT_FOCUSED_APP}`);
+      // Stay on the landing URL until the user opens an app icon.
+      if (DESKTOP_DEFAULT_FOCUSED_APP) {
+        window.history.replaceState(null, "", `/${DESKTOP_DEFAULT_FOCUSED_APP}`);
+      } else {
+        window.history.replaceState(null, "", "/");
+      }
     }
   }, [restoreDefaultOnUnlock, restoreDesktopDefault]);
 
   useLayoutEffect(() => {
-    if (typeof window === "undefined") return;
-    const seenBoot = window.localStorage.getItem(BOOT_SEEN_KEY) === "1";
-    setStartupPhase(seenBoot ? "auth" : "boot");
+    // Show the start screen immediately; boot/auth overlays made the first page feel stuck.
+    setStartupPhase("ready");
   }, []);
 
   useEffect(() => {
@@ -505,6 +508,8 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     if (openedLobbyOnEntryRef.current) return;
     if (typeof window === "undefined") return;
     if (window.location.pathname !== "/") return;
+
+    if (!DESKTOP_DEFAULT_FOCUSED_APP) return;
 
     openedLobbyOnEntryRef.current = true;
     openWindow(DESKTOP_DEFAULT_FOCUSED_APP);

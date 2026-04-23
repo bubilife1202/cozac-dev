@@ -5,6 +5,8 @@ import { CheckCircle2, FolderPlus, Sparkles } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useWindowFocus } from "@/lib/window-focus-context";
+import { WindowControls } from "@/components/window-controls";
 import {
   BrowserFolderAdapter,
   createLineDiffSummary,
@@ -382,6 +384,8 @@ export function LocalAgentApp({
   const pendingSecretsRef = useRef<Record<string, PendingSecretOperation>>({});
   const modelEngineRef = useRef<ResolvedLocalModelEngine | null>(null);
   const modelSessionRef = useRef<unknown>(null);
+  const windowFocus = useWindowFocus();
+  const inDesktopShell = Boolean(inShell && windowFocus);
 
   useEffect(() => {
     if (state) {
@@ -787,14 +791,38 @@ export function LocalAgentApp({
       className="h-full w-full overflow-hidden bg-[#f4efe4] text-[#17120b] dark:bg-[#15120d] dark:text-[#f7efe1]"
     >
       <div className="flex h-full min-h-0 flex-col">
-        <header className="flex shrink-0 items-center justify-between border-b border-black/10 bg-[#fbf6ea]/90 px-5 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#1d1811]/90">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8a6b2e] dark:text-[#d5b66a]">Local-only agent</div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-[-0.04em]">Local Agent</h1>
+        <header
+          className="flex shrink-0 items-center justify-between border-b border-black/10 bg-[#fbf6ea]/90 px-5 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#1d1811]/90"
+          onMouseDown={inDesktopShell ? windowFocus?.onDragStart : undefined}
+        >
+          <div className="flex items-center gap-4">
+            <WindowControls
+              inShell={inDesktopShell}
+              showWhenNotInShell={false}
+              onClose={inDesktopShell ? windowFocus?.closeWindow : undefined}
+              onMinimize={inDesktopShell ? windowFocus?.minimizeWindow : undefined}
+              onToggleMaximize={inDesktopShell ? windowFocus?.toggleMaximize : undefined}
+              isMaximized={windowFocus?.isMaximized ?? false}
+              closeLabel="Close Local Agent"
+              className="p-1"
+            />
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8a6b2e] dark:text-[#d5b66a]">Local-only agent</div>
+              <h1 className="mt-1 text-2xl font-semibold tracking-[-0.04em]">Local Agent</h1>
+            </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
             <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 font-medium text-emerald-700 dark:text-emerald-200">No cloud fallback</span>
             <span className="rounded-full border border-black/10 bg-white/70 px-3 py-1 font-medium text-stone-700 dark:border-white/10 dark:bg-white/10 dark:text-stone-200">{modelReady ? "Model ready" : modelBusy ? "Model loading" : "Model idle"}</span>
+            {inDesktopShell && (
+              <button
+                type="button"
+                onClick={windowFocus?.closeWindow}
+                className="rounded-full border border-black/10 bg-white/70 px-3 py-1 font-medium text-stone-700 transition hover:bg-white dark:border-white/10 dark:bg-white/10 dark:text-stone-200 dark:hover:bg-white/15"
+              >
+                Close
+              </button>
+            )}
           </div>
         </header>
 

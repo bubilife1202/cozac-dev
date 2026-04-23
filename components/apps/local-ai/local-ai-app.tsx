@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Atom, CheckCircle2, ChevronRight, Code2, Download, Folder, LockKeyhole, Send, Settings, Zap } from "lucide-react";
+import { Atom, CheckCircle2, ChevronRight, Download, LockKeyhole, Send, Settings, Zap } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -214,7 +214,7 @@ function buildDeviceSuitability(
     return {
       verdict: "mixed",
       headline: "Gemma 4보다는 fallback runtime이 먼저입니다",
-      body: "브라우저에서는 현재 Gemma 3 270M fallback을 먼저 쓰고, Gemma 4는 더 무거운 로컬 런타임으로 준비하는 게 맞습니다.",
+      body: "브라우저에서는 현재 가벼운 호환 런타임이 먼저이고, Gemma 4는 더 무거운 로컬 런타임으로 준비하는 편이 맞습니다.",
       chips,
     };
   }
@@ -222,8 +222,63 @@ function buildDeviceSuitability(
   return {
     verdict: "blocked",
     headline: "이 브라우저에서는 Gemma 4가 무겁습니다",
-    body: "WebGPU가 없어서 현재는 Gemma 3 270M fallback만 현실적입니다.",
+    body: "WebGPU가 없어서 현재는 가벼운 호환 런타임만 현실적입니다.",
     chips,
+  };
+}
+
+function getRecommendedGemma4Tier(recommendation: LocalAgentModelRecommendation): ModelTier {
+  if (recommendation.tier === "e2b") return "e2b";
+  if (recommendation.tier === "e4b") return "e4b";
+  return "e2b";
+}
+
+function describeGemma4Tier(
+  tier: ModelTier,
+  recommendation: LocalAgentModelRecommendation,
+  signals: ReturnType<typeof probeLocalAiCapabilities> | null,
+): { headline: string; detail: string; status: "recommended" | "fits" | "heavy" | "avoid" } {
+  const recommendedTier = getRecommendedGemma4Tier(recommendation);
+  const memory = signals?.memoryGB ?? 0;
+  const webgpu = signals?.webGPU ?? false;
+
+  if (tier === "e2b") {
+    return {
+      headline: "가벼운 Gemma 4 시작점",
+      detail:
+        recommendedTier === "e2b"
+          ? "현재 브라우저 신호에서는 E2B가 가장 안전한 Gemma 4 선택입니다."
+          : "E2B는 이 기기에서 무난하게 돌릴 수 있는 하위 선택지입니다.",
+      status: recommendedTier === "e2b" ? "recommended" : "fits",
+    };
+  }
+
+  if (tier === "e4b") {
+    return {
+      headline: "이 기기에서 가장 먼저 볼 모델",
+      detail:
+        recommendedTier === "e4b"
+          ? "현재 CPU / 메모리 / WebGPU 신호 기준으로 E4B가 가장 적합합니다."
+          : "E4B는 가능할 수 있지만 지금 브라우저 신호상 E2B보다 무겁습니다.",
+      status: recommendedTier === "e4b" ? "recommended" : webgpu ? "heavy" : "avoid",
+    };
+  }
+
+  if (tier === "26b-a4b") {
+    return {
+      headline: "브라우저보다는 네이티브 런타임용",
+      detail:
+        webgpu && memory >= 24
+          ? "32GB급 기기에서도 브라우저보다는 Ollama 같은 네이티브 런타임에 더 가깝습니다."
+          : "이 등급부터는 브라우저 로컬보다는 네이티브 런타임/워크스테이션 영역입니다.",
+      status: "heavy",
+    };
+  }
+
+  return {
+    headline: "현재 브라우저 로컬 범위를 넘습니다",
+    detail: "31B는 이 기기에서 브라우저 로컬 모델로 권하지 않습니다. 서버나 고성능 워크스테이션이 맞습니다.",
+    status: "avoid",
   };
 }
 
@@ -242,10 +297,9 @@ type ChatMessage = {
 };
 
 const RUNNABLE_LOCAL_MODEL_ID = "onnx-community/gemma-3-270m-it-ONNX";
-const RUNNABLE_LOCAL_MODEL_LABEL = "Gemma 3 270M browser fallback";
-const PRIMARY_LOCAL_MODEL_LABEL = "Gemma 4 E4B";
+const RUNNABLE_LOCAL_MODEL_LABEL = "compatibility runtime";
 
-type ModelTier = "recommended" | "fallback";
+type ModelTier = "e2b" | "e4b" | "26b-a4b" | "31b";
 
 const MODEL_TIERS: Array<{
   id: ModelTier;
@@ -256,18 +310,35 @@ const MODEL_TIERS: Array<{
   icon: typeof Zap;
 }> = [
   {
-    id: "recommended",
-    label: "Recommended",
-    model: PRIMARY_LOCAL_MODEL_LABEL,
-    description: "Gemma 4 target for stronger Macs",
-    badge: "Gemma 4",
+    id: "e2b",
+    label: "Gemma 4",
+    model: "E2B",
+    description: "Smallest on-device Gemma 4 model",
+    badge: "Edge",
+    icon: Zap,
+  },
+  {
+    id: "e4b",
+    label: "Gemma 4",
+    model: "E4B",
+    description: "Best local default for stronger laptops",
+    badge: "Recommended",
     icon: Atom,
   },
   {
-    id: "fallback",
-    label: "Fallback",
-    model: "Gemma 3 270M",
-    description: "Current browser download/runtime path",
+    id: "26b-a4b",
+    label: "Gemma 4",
+    model: "26B A4B",
+    description: "Workstation-class MoE model",
+    badge: "Heavy",
+    icon: Atom,
+  },
+  {
+    id: "31b",
+    label: "Gemma 4",
+    model: "31B",
+    description: "Largest dense Gemma 4 model",
+    badge: "Server",
     icon: Zap,
   },
 ];
@@ -456,9 +527,10 @@ export function LocalAgentApp({
   const externalWorkbench = useMemo(() => mergeWorkbenchState(state), [state]);
   const [workbench, setWorkbench] = useState<LocalAgentWorkbenchState>(externalWorkbench);
   const [selectedRole, setSelectedRole] = useState<LocalAgentFolderRole>("code");
-  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("recommended");
+  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("e4b");
   const [prompt, setPrompt] = useState("");
   const [adapterNotice, setAdapterNotice] = useState<string | null>(null);
+  const [detectedSignals, setDetectedSignals] = useState<ReturnType<typeof probeLocalAiCapabilities> | null>(null);
   const [deviceSuitability, setDeviceSuitability] = useState<DeviceSuitability>(() =>
     buildDeviceSuitability(
       probeLocalAiCapabilities({
@@ -505,6 +577,7 @@ export function LocalAgentApp({
       capabilities,
       modelRecommendation: recommendation,
     }));
+    setDetectedSignals(signals);
     setDeviceSuitability(buildDeviceSuitability(signals, recommendation));
 
 
@@ -517,6 +590,10 @@ export function LocalAgentApp({
         setAdapterNotice(error instanceof Error ? error.message : "Browser storage is unavailable for Local Agent state.");
       });
   }, [state]);
+
+  useEffect(() => {
+    setSelectedModelTier(getRecommendedGemma4Tier(workbench.modelRecommendation));
+  }, [workbench.modelRecommendation]);
 
   const selectedFolder = useMemo(
     () => workbench.folders.find((folder) => folder.role === selectedRole) ?? workbench.folders[0],
@@ -948,14 +1025,7 @@ export function LocalAgentApp({
                 {MODEL_TIERS.map((tier) => {
                   const selected = selectedModelTier === tier.id;
                   const Icon = tier.icon;
-                  const displayModel =
-                    tier.id === "recommended"
-                      ? workbench.modelRecommendation.label.replace(/\s+(recommended|likely suitable)$/i, "")
-                      : tier.model;
-                  const displayDescription =
-                    tier.id === "recommended"
-                      ? workbench.modelRecommendation.reason
-                      : tier.description;
+                  const descriptor = describeGemma4Tier(tier.id, workbench.modelRecommendation, detectedSignals);
                   return (
                     <button
                       key={tier.id}
@@ -972,14 +1042,15 @@ export function LocalAgentApp({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2 whitespace-nowrap text-[15px] font-semibold tracking-[-0.03em] text-[#1c1b19]">
-                          {tier.label} — {displayModel}
-                          {tier.badge && (
+                          {tier.label} — {tier.model}
+                          {(tier.badge || descriptor.status === "recommended") && (
                             <span className="rounded-[7px] bg-[#f3ebdf] px-1.5 py-1 text-[11px] font-medium text-[#8a683c]">
-                              {tier.badge}
+                              {descriptor.status === "recommended" ? "Recommended" : tier.badge}
                             </span>
                           )}
                         </span>
-                        <span className="mt-1 block text-sm text-[#5f5b55]">{displayDescription}</span>
+                        <span className="mt-1 block text-sm text-[#5f5b55]">{descriptor.headline}</span>
+                        <span className="mt-1 block text-xs leading-relaxed text-[#8a837b]">{descriptor.detail}</span>
                       </span>
                       {selected && (
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1f1e1b] text-white">
@@ -1021,10 +1092,10 @@ export function LocalAgentApp({
                 className="mt-4 flex min-h-[58px] w-full items-center justify-center gap-3 rounded-[16px] bg-[#24221f] px-4 py-3 text-[16px] font-semibold text-white transition hover:scale-[1.01] hover:bg-[#171613] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-5 w-5" />
-                {modelReady ? "Reload browser fallback" : modelBusy ? "Downloading browser fallback..." : "Download browser fallback"}
+                {modelReady ? "Reload local runtime" : modelBusy ? "Preparing local runtime..." : "Prepare local runtime"}
               </button>
               <p className="mt-2 text-xs leading-relaxed text-[#706a62]">
-                Current browser runtime: {RUNNABLE_LOCAL_MODEL_LABEL}. Gemma 4 is shown here as the target tier and suitability decision for this device.
+                Gemma 4 series are shown here for device fit and model selection. The browser-side runtime is still using a lightweight compatibility path during rollout.
               </p>
               {(modelRun.status === "loading" || modelRun.status === "generating" || modelRun.status === "error") && (
                 <div className="mt-3 rounded-[14px] bg-[#f5f1ea] p-3 text-xs leading-relaxed text-[#69635c]">
@@ -1057,8 +1128,11 @@ export function LocalAgentApp({
                       onClick={() => void handleSelectFolder(folder.role)}
                       className="flex items-center justify-between rounded-[12px] border border-[#e7e2dc] bg-[#fcfbf8] px-3 py-2.5 text-left text-sm font-medium text-[#2a2722] transition hover:bg-white"
                     >
-                      <span>{folder.permission === "granted" ? `Change ${ROLE_COPY[folder.role].label} folder` : `Select ${ROLE_COPY[folder.role].label} folder`}</span>
-                      <span className="text-xs uppercase tracking-[0.12em] text-[#8c877f]">
+                      <span className="min-w-0">
+                        <span className="block">{folder.permission === "granted" ? `Change ${ROLE_COPY[folder.role].label} folder` : `Select ${ROLE_COPY[folder.role].label} folder`}</span>
+                        <span className="mt-0.5 block truncate text-xs font-normal text-[#706a62]">{folder.name}</span>
+                      </span>
+                      <span className="shrink-0 text-xs uppercase tracking-[0.12em] text-[#8c877f]">
                         {folder.permission === "granted" ? "selected" : "required"}
                       </span>
                     </button>
@@ -1071,40 +1145,6 @@ export function LocalAgentApp({
                       ? "At least one local folder is assigned. Add the rest for a complete local workspace."
                       : "No local folder is assigned yet."}
                 </p>
-              </div>
-              <div className="grid gap-2">
-                {workbench.folders.map((folder) => {
-                  const selected = selectedRole === folder.role;
-                  const Icon = folder.role === "code" ? Code2 : Folder;
-                  return (
-                    <button
-                      key={folder.id}
-                      type="button"
-                      onClick={() => void handleSelectFolder(folder.role)}
-                      className={cn(
-                        "flex min-h-[70px] items-center gap-4 rounded-[15px] border px-4 py-3 text-left transition",
-                        selected
-                          ? "border-[#d8d1c8] bg-white text-[#181715] shadow-sm"
-                          : "border-[#e7e2dc] bg-white/70 hover:bg-white"
-                      )}
-                    >
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] border border-[#e8e3dc] bg-[#fffefa] text-[#1d1c1a]">
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[16px] font-semibold tracking-[-0.02em]">{ROLE_COPY[folder.role].label}</span>
-                        <span className="mt-0.5 block truncate text-sm text-[#5f5b55]">{folder.name}</span>
-                        <span className="mt-1 block text-xs text-[#8a837b]">{ROLE_COPY[folder.role].description}</span>
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] uppercase tracking-[0.12em] text-[#8c877f]">
-                          {folder.permission === "granted" ? "Selected" : "Select folder"}
-                        </span>
-                        <ChevronRight className="h-5 w-5 text-[#4f4a44]" />
-                      </div>
-                    </button>
-                  );
-                })}
               </div>
             </section>
 

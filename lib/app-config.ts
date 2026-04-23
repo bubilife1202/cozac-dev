@@ -22,6 +22,7 @@ export const APPS: AppConfig[] = [
     defaultSize: { width: 900, height: 600 },
     minSize: { width: 600, height: 400 },
     menuBarTitle: "Notes",
+    showOnDockByDefault: false,
   },
   {
     id: "messages",

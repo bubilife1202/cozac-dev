@@ -71,16 +71,15 @@ function getDefaultWindowState(appId: string): WindowState {
 // =============================================================================
 
 // Default app shown to new visitors (used when no initialAppId specified)
-const DEFAULT_APP = "notes";
+const DEFAULT_APP = "local-ai";
 
 // Desktop default configuration (shown after logout/restart/shutdown)
 // Windows listed in z-index order (first = back, last = front)
 const DESKTOP_DEFAULT_CONFIG = {
   windows: [
-    { appId: "messages", position: { x: 500, y: 60 } },
-    { appId: "notes", position: { x: 150, y: 40 }, size: { width: 1000, height: 700 } },
+    { appId: "local-ai", position: { x: 120, y: 42 }, size: { width: 1040, height: 600 } },
   ],
-  focusedAppId: "notes",
+  focusedAppId: "local-ai",
 } as const;
 
 // Export for use in desktop.tsx URL handling

@@ -473,14 +473,10 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     if (restoreDefaultOnUnlock) {
       restoreDesktopDefault();
       setRestoreDefaultOnUnlock(false);
-      // Update URL to match default focused app
-      if (DESKTOP_DEFAULT_FOCUSED_APP === "notes") {
-        window.history.replaceState(null, "", `/notes/${initialNoteSlug || "about-me"}`);
-      } else {
-        window.history.replaceState(null, "", `/${DESKTOP_DEFAULT_FOCUSED_APP}`);
-      }
+      // Update URL to match default focused app.
+      window.history.replaceState(null, "", `/${DESKTOP_DEFAULT_FOCUSED_APP}`);
     }
-  }, [restoreDefaultOnUnlock, restoreDesktopDefault, initialNoteSlug]);
+  }, [restoreDefaultOnUnlock, restoreDesktopDefault]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -511,9 +507,9 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     if (window.location.pathname !== "/") return;
 
     openedLobbyOnEntryRef.current = true;
-    openWindow("lobby");
-    focusWindow("lobby");
-    window.history.replaceState(null, "", "/lobby");
+    openWindow(DESKTOP_DEFAULT_FOCUSED_APP);
+    focusWindow(DESKTOP_DEFAULT_FOCUSED_APP);
+    window.history.replaceState(null, "", `/${DESKTOP_DEFAULT_FOCUSED_APP}`);
   }, [startupPhase, user, openWindow, focusWindow]);
 
   return (

@@ -296,8 +296,9 @@ type ChatMessage = {
   timestamp?: string;
 };
 
-const RUNNABLE_LOCAL_MODEL_ID = "onnx-community/gemma-3-270m-it-ONNX";
 const RUNNABLE_LOCAL_MODEL_LABEL = "compatibility runtime";
+const GEMMA4_E2B_MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
+const GEMMA4_E4B_MODEL_ID = "onnx-community/gemma-4-E4B-it-ONNX";
 
 type ModelTier = "e2b" | "e4b" | "26b-a4b" | "31b";
 
@@ -342,6 +343,19 @@ const MODEL_TIERS: Array<{
     icon: Zap,
   },
 ];
+
+function getSelectedBrowserModelId(tier: ModelTier): string | null {
+  if (tier === "e2b") return GEMMA4_E2B_MODEL_ID;
+  if (tier === "e4b") return GEMMA4_E4B_MODEL_ID;
+  return null;
+}
+
+function getSelectedModelLabel(tier: ModelTier): string {
+  if (tier === "e2b") return "Gemma 4 E2B";
+  if (tier === "e4b") return "Gemma 4 E4B";
+  if (tier === "26b-a4b") return "Gemma 4 26B A4B";
+  return "Gemma 4 31B";
+}
 
 type LocalModelUiStatus = "idle" | "loading" | "ready" | "generating" | "error";
 
@@ -559,6 +573,7 @@ export function LocalAgentApp({
   const pendingSecretsRef = useRef<Record<string, PendingSecretOperation>>({});
   const modelEngineRef = useRef<ResolvedLocalModelEngine | null>(null);
   const modelSessionRef = useRef<unknown>(null);
+  const loadedModelIdRef = useRef<string | null>(null);
   const windowFocus = useWindowFocus();
   const inDesktopShell = Boolean(inShell && windowFocus);
 
@@ -775,9 +790,26 @@ export function LocalAgentApp({
   }, []);
 
   const handleLoadModel = useCallback(async () => {
+    const selectedModelId = getSelectedBrowserModelId(selectedModelTier);
+    const selectedModelLabel = getSelectedModelLabel(selectedModelTier);
+    if (!selectedModelId) {
+      const message = `${selectedModelLabel}는 현재 브라우저에서 바로 돌리는 대신 Ollama 같은 네이티브 로컬 런타임 쪽이 맞습니다.`;
+      setModelRun({
+        status: "error",
+        message: "Selected model is not browser-runnable.",
+        error: message,
+      });
+      addEvent({
+        title: "Browser runtime unavailable for selected model",
+        detail: message,
+        status: "blocked",
+      });
+      throw new Error(message);
+    }
+
     setModelRun({
       status: "loading",
-      message: `Preparing ${RUNNABLE_LOCAL_MODEL_LABEL}; model files stay in the browser cache/runtime.`,
+      message: `Preparing ${selectedModelLabel}; model files stay in the browser cache/runtime.`,
       progress: 0,
     });
 
@@ -785,20 +817,21 @@ export function LocalAgentApp({
       const engine = modelEngineRef.current ?? (await resolveLocalModelEngine());
       modelEngineRef.current = engine;
       const session = await engine.load({
-        modelId: RUNNABLE_LOCAL_MODEL_ID,
+        modelId: selectedModelId,
         onProgress: (progress: unknown) => handleModelProgress(progress, "loading"),
       });
       modelSessionRef.current = session;
+      loadedModelIdRef.current = selectedModelId;
       setModelRun((current) => ({
         ...current,
         status: "ready",
-        message: `${RUNNABLE_LOCAL_MODEL_LABEL} is loaded locally. This is the current browser fallback runtime for Local Agent.`,
+        message: `${selectedModelLabel} is loaded locally and ready to answer in this browser tab.`,
         progress: 100,
         error: undefined,
       }));
       addEvent({
         title: "Local model loaded",
-        detail: `${RUNNABLE_LOCAL_MODEL_ID} loaded through the browser-local model engine. No chat route, localhost bridge, or cloud fallback was used by the UI.`,
+        detail: `${selectedModelId} loaded through the browser-local model engine. No chat route, localhost bridge, or cloud fallback was used by the UI.`,
         status: "complete",
       });
       return session;
@@ -816,24 +849,35 @@ export function LocalAgentApp({
       });
       throw error;
     }
-  }, [addEvent, handleModelProgress]);
+  }, [addEvent, handleModelProgress, selectedModelTier]);
 
   const answerWithLocalModel = useCallback(
     async (userPrompt: string, localContext?: string) => {
+      const selectedModelId = getSelectedBrowserModelId(selectedModelTier);
+      const selectedModelLabel = getSelectedModelLabel(selectedModelTier);
+      if (!selectedModelId) {
+        const message = `${selectedModelLabel}는 현재 브라우저 로컬 채팅 런타임이 아니라 네이티브 로컬 런타임(Ollama류) 대상으로 보는 게 맞습니다.`;
+        appendChatMessage("assistant", message);
+        throw new Error(message);
+      }
       const engine = modelEngineRef.current ?? (await resolveLocalModelEngine());
       modelEngineRef.current = engine;
+      const needsReload = loadedModelIdRef.current !== selectedModelId;
+      if (needsReload) {
+        modelSessionRef.current = null;
+      }
       const session = modelSessionRef.current ?? (await handleLoadModel());
 
       setModelRun((current) => ({
         ...current,
         status: "generating",
-        message: "Generating with the browser-local model...",
+        message: `Generating with ${selectedModelLabel}...`,
         error: undefined,
       }));
 
       const output = await engine.generate({
         prompt: userPrompt,
-        modelId: RUNNABLE_LOCAL_MODEL_ID,
+        modelId: selectedModelId,
         model: session,
         session,
         localContext,
@@ -856,7 +900,7 @@ export function LocalAgentApp({
         status: "complete",
       });
     },
-    [addEvent, appendChatMessage, handleLoadModel, handleModelProgress]
+    [addEvent, appendChatMessage, handleLoadModel, handleModelProgress, selectedModelTier]
   );
 
   const handleSubmitPrompt = useCallback(async () => {
@@ -963,8 +1007,9 @@ export function LocalAgentApp({
     [onReviewSecretOperation, readPath, writePath]
   );
 
+  const selectedBrowserModelId = getSelectedBrowserModelId(selectedModelTier);
   const modelBusy = modelRun.status === "loading" || modelRun.status === "generating";
-  const modelReady = modelRun.status === "ready";
+  const modelReady = modelRun.status === "ready" && loadedModelIdRef.current === selectedBrowserModelId;
   const pendingApprovalEvents = workbench.events.filter((event) => event.approvalRequired).slice(0, 3);
 
   return (
@@ -1003,7 +1048,7 @@ export function LocalAgentApp({
             </span>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#e4e0da] bg-[#f5f2ee] px-4 py-2 text-sm font-medium text-[#6a6660]">
               <CheckCircle2 className="h-4 w-4" />
-              {modelReady ? "Model ready" : modelBusy ? "Model loading" : "Model ready"}
+              {modelReady ? `${getSelectedModelLabel(selectedModelTier)} ready` : modelBusy ? "Model loading" : "Model not loaded"}
             </span>
             {inDesktopShell && (
               <button

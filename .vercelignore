@@ -1,0 +1,21 @@
+# Local agent/runtime state and model caches
+.omx
+.omx/**
+.codex
+.codex/**
+.playwright-cli
+.playwright-cli/**
+output
+output/**
+
+# Local-only generated drafts/assets that should not ship with the app
+Candid_*
+\[CCF\]*
+generate_resume_v4.js
+get_resume.js
+get_resume_all.js
+lobby-mobile.png
+
+# Local env and system files
+.env.local
+.DS_Store

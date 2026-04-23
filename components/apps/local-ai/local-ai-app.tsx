@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, FolderPlus, Sparkles } from "lucide-react";
+import { Atom, CheckCircle2, ChevronRight, Code2, Download, Folder, LockKeyhole, Send, Settings, Zap } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -178,10 +178,39 @@ type ChatMessage = {
   id: string;
   role: "assistant" | "user";
   text: string;
+  timestamp?: string;
 };
 
 const RUNNABLE_LOCAL_MODEL_ID = "onnx-community/gemma-3-270m-it-ONNX";
 const RUNNABLE_LOCAL_MODEL_LABEL = "Gemma 3 270M local smoke model";
+const BETTER_LOCAL_MODEL_LABEL = "Gemma 3n E2B";
+
+type ModelTier = "fast" | "better";
+
+const MODEL_TIERS: Array<{
+  id: ModelTier;
+  label: string;
+  model: string;
+  description: string;
+  badge?: string;
+  icon: typeof Zap;
+}> = [
+  {
+    id: "fast",
+    label: "Fast",
+    model: "Gemma 3 270M",
+    description: "Small browser runtime fallback",
+    icon: Zap,
+  },
+  {
+    id: "better",
+    label: "Better",
+    model: BETTER_LOCAL_MODEL_LABEL,
+    description: "Recommended advanced local model",
+    badge: "Advanced",
+    icon: Atom,
+  },
+];
 
 type LocalModelUiStatus = "idle" | "loading" | "ready" | "generating" | "error";
 
@@ -367,7 +396,8 @@ export function LocalAgentApp({
   const externalWorkbench = useMemo(() => mergeWorkbenchState(state), [state]);
   const [workbench, setWorkbench] = useState<LocalAgentWorkbenchState>(externalWorkbench);
   const [selectedRole, setSelectedRole] = useState<LocalAgentFolderRole>("code");
-  const [prompt, setPrompt] = useState("Inspect the selected folder and propose the smallest safe change.");
+  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("better");
+  const [prompt, setPrompt] = useState("");
   const [adapterNotice, setAdapterNotice] = useState<string | null>(null);
   const [modelRun, setModelRun] = useState<LocalModelUiState>({
     status: "idle",
@@ -375,9 +405,10 @@ export function LocalAgentApp({
   });
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      id: "initial-load-gate",
+      id: "initial-greeting",
       role: "assistant",
-      text: "Load a local model to start.",
+      text: "안녕하세요. 여기서는 로컬 모델과 바로 대화하면 됩니다.\n필요하면 왼쪽에서 모델을 다운로드하고, 폴더 접근은 직접 선택할 때만 열립니다.",
+      timestamp: "11:52 AM",
     },
   ]);
   const adaptersRef = useRef<Partial<Record<LocalAgentFolderRole, BrowserFolderAdapter>>>({});
@@ -407,7 +438,7 @@ export function LocalAgentApp({
     void openLocalAiDatabase()
       .then((database) => {
         database.close();
-        setAdapterNotice("Browser-local storage is ready; no Local Agent state is sent to the server.");
+        setAdapterNotice(null);
       })
       .catch((error: unknown) => {
         setAdapterNotice(error instanceof Error ? error.message : "Browser storage is unavailable for Local Agent state.");
@@ -515,6 +546,7 @@ export function LocalAgentApp({
         id: makeUiId("message"),
         role,
         text,
+        timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       },
     ]);
   }, []);
@@ -788,11 +820,11 @@ export function LocalAgentApp({
       data-app="local-ai"
       data-mobile={isMobile ? "true" : "false"}
       data-shell={inShell ? "true" : "false"}
-      className="h-full w-full overflow-hidden bg-[#f4efe4] text-[#17120b] dark:bg-[#15120d] dark:text-[#f7efe1]"
+      className="h-full w-full overflow-hidden bg-[#fcfbf8] text-[#1d1c1a]"
     >
       <div className="flex h-full min-h-0 flex-col">
         <header
-          className="flex shrink-0 items-center justify-between border-b border-black/10 bg-[#fbf6ea]/90 px-5 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#1d1811]/90"
+          className="flex shrink-0 items-center justify-between border-b border-[#e6e2dc] bg-[#fffefa]/95 px-7 py-5 backdrop-blur-xl"
           onMouseDown={inDesktopShell ? windowFocus?.onDragStart : undefined}
         >
           <div className="flex items-center gap-4">
@@ -806,19 +838,26 @@ export function LocalAgentApp({
               closeLabel="Close Local Agent"
               className="p-1"
             />
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8a6b2e] dark:text-[#d5b66a]">Local-only agent</div>
-              <h1 className="mt-1 text-2xl font-semibold tracking-[-0.04em]">Local Agent</h1>
+            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#0d0d0d] text-sm font-bold tracking-[-0.05em] text-white shadow-sm">
+              CZ
             </div>
+            <div className="text-[26px] font-semibold tracking-[-0.04em] text-[#151515]">cozac.dev</div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
-            <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 font-medium text-emerald-700 dark:text-emerald-200">No cloud fallback</span>
-            <span className="rounded-full border border-black/10 bg-white/70 px-3 py-1 font-medium text-stone-700 dark:border-white/10 dark:bg-white/10 dark:text-stone-200">{modelReady ? "Model ready" : modelBusy ? "Model loading" : "Model idle"}</span>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <h1 className="mr-2 text-[26px] font-semibold tracking-[-0.04em] text-[#151515]">Local Agent</h1>
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#eaf7eb] px-4 py-2 text-sm font-medium text-[#28743a]">
+              <LockKeyhole className="h-4 w-4" />
+              Local only
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#e4e0da] bg-[#f5f2ee] px-4 py-2 text-sm font-medium text-[#6a6660]">
+              <CheckCircle2 className="h-4 w-4" />
+              {modelReady ? "Model ready" : modelBusy ? "Model loading" : "Model ready"}
+            </span>
             {inDesktopShell && (
               <button
                 type="button"
                 onClick={windowFocus?.closeWindow}
-                className="rounded-full border border-black/10 bg-white/70 px-3 py-1 font-medium text-stone-700 transition hover:bg-white dark:border-white/10 dark:bg-white/10 dark:text-stone-200 dark:hover:bg-white/15"
+                className="rounded-full border border-[#e4e0da] bg-white px-3 py-1.5 text-xs font-medium text-[#6a6660] transition hover:bg-[#f6f3ef]"
               >
                 Close
               </button>
@@ -826,156 +865,200 @@ export function LocalAgentApp({
           </div>
         </header>
 
-        <main className={cn("grid min-h-0 flex-1 gap-4 p-4", isMobile ? "grid-cols-1 overflow-auto" : "grid-cols-[300px_minmax(0,1fr)]") }>
-          <aside className="flex min-h-0 flex-col gap-4 overflow-auto rounded-[28px] border border-black/10 bg-[#fffaf0] p-4 shadow-sm dark:border-white/10 dark:bg-[#211b13]">
+        <main className={cn("grid min-h-0 flex-1 bg-[#fcfbf8]", isMobile ? "grid-cols-1 overflow-auto" : "grid-cols-[360px_minmax(0,1fr)]") }>
+          <aside className="flex min-h-0 flex-col overflow-auto border-r border-[#e6e2dc] bg-[#fbfaf7] px-7 py-7">
             <section>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 dark:text-stone-400">Model</div>
-                  <div className="mt-1 font-semibold">Gemma 270M</div>
-                </div>
-                <Sparkles className="h-5 w-5 text-amber-500" />
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleLoadModel().catch(() => undefined)}
-                disabled={modelBusy}
-                className="flex min-h-11 w-full items-center justify-center rounded-2xl bg-[#17120b] px-4 py-2 text-sm font-semibold text-white transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#f5deb0] dark:text-[#17120b]"
-              >
-                {modelReady ? "Reload local model" : modelBusy ? "Loading..." : "Download / load model"}
-              </button>
-              <div className="mt-3 rounded-2xl bg-black/[0.04] p-3 text-xs leading-relaxed text-stone-600 dark:bg-white/[0.06] dark:text-stone-300">
-                <div className="flex items-center justify-between gap-3 font-medium uppercase tracking-[0.14em]">
-                  <span>{modelRun.status}</span>
-                  {typeof modelRun.progress === "number" && <span>{modelRun.progress}%</span>}
-                </div>
-                {typeof modelRun.progress === "number" && (
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                    <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.min(Math.max(modelRun.progress, 0), 100)}%` }} />
-                  </div>
-                )}
-                <p className="mt-2">{modelRun.error ?? modelRun.message}</p>
-              </div>
-              <p className="mt-3 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-                E2B is verified on this Mac, but 270M stays the fast web default.
-              </p>
-            </section>
-
-            <section className="border-t border-black/10 pt-4 dark:border-white/10">
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 dark:text-stone-400">Workspace</div>
-              <div className="grid gap-2">
-                {workbench.folders.map((folder) => {
-                  const selected = selectedRole === folder.role;
+              <div className="mb-3 text-lg font-medium tracking-[-0.02em] text-[#1d1c1a]">Model</div>
+              <div className="grid gap-3">
+                {MODEL_TIERS.map((tier) => {
+                  const selected = selectedModelTier === tier.id;
+                  const Icon = tier.icon;
                   return (
                     <button
-                      key={folder.id}
+                      key={tier.id}
                       type="button"
-                      onClick={() => setSelectedRole(folder.role)}
+                      onClick={() => setSelectedModelTier(tier.id)}
                       className={cn(
-                        "rounded-2xl border px-3 py-3 text-left transition",
-                        selected
-                          ? "border-[#17120b] bg-[#17120b] text-white dark:border-[#f5deb0] dark:bg-[#f5deb0] dark:text-[#17120b]"
-                          : "border-black/10 bg-white/60 hover:bg-white dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
+                        "group flex min-h-[80px] items-center gap-4 rounded-[16px] border bg-white px-4 py-3 text-left transition hover:border-[#c5aa7a] hover:bg-[#fffdf7]",
+                        selected ? "border-[#b9975d] shadow-[0_0_0_1px_rgba(185,151,93,0.18)]" : "border-[#e7e2dc]"
                       )}
+                      aria-pressed={selected}
                     >
-                      <div className="flex items-center justify-between gap-2 text-sm font-semibold">
-                        <span>{ROLE_COPY[folder.role].label}</span>
-                        <span className="text-[10px] uppercase tracking-[0.12em] opacity-70">{PERMISSION_COPY[folder.permission]}</span>
-                      </div>
-                      <div className="mt-1 truncate text-xs opacity-75">{folder.name}</div>
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[13px] border border-[#ede8e2] bg-[#fffdfa] text-[#b57918]">
+                        <Icon className="h-6 w-6" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2 whitespace-nowrap text-[15px] font-semibold tracking-[-0.03em] text-[#1c1b19]">
+                          {tier.label} — {tier.model}
+                          {tier.badge && (
+                            <span className="rounded-[7px] bg-[#f3ebdf] px-1.5 py-1 text-[11px] font-medium text-[#8a683c]">
+                              {tier.badge}
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-1 block text-sm text-[#5f5b55]">{tier.description}</span>
+                      </span>
+                      {selected && (
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1f1e1b] text-white">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </span>
+                      )}
                     </button>
                   );
                 })}
               </div>
               <button
                 type="button"
-                onClick={() => void handleSelectFolder(selectedRole)}
-                className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-4 py-2 text-sm font-semibold transition hover:bg-white dark:border-white/10 dark:bg-white/[0.06] dark:hover:bg-white/[0.1]"
+                onClick={() => void handleLoadModel().catch(() => undefined)}
+                disabled={modelBusy}
+                className="mt-4 flex min-h-[58px] w-full items-center justify-center gap-3 rounded-[16px] bg-[#24221f] px-4 py-3 text-[16px] font-semibold text-white transition hover:scale-[1.01] hover:bg-[#171613] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <FolderPlus className="h-4 w-4" />
-                Select {ROLE_COPY[selectedRole].label.toLowerCase()} folder
+                <Download className="h-5 w-5" />
+                {modelReady ? "Reload model" : modelBusy ? "Downloading model..." : "Download model"}
               </button>
+              {(modelRun.status === "loading" || modelRun.status === "generating" || modelRun.status === "error") && (
+                <div className="mt-3 rounded-[14px] bg-[#f5f1ea] p-3 text-xs leading-relaxed text-[#69635c]">
+                  <div className="flex items-center justify-between gap-3 font-medium uppercase tracking-[0.12em]">
+                    <span>{modelRun.status}</span>
+                    {typeof modelRun.progress === "number" && <span>{modelRun.progress}%</span>}
+                  </div>
+                {typeof modelRun.progress === "number" && (
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10">
+                    <div className="h-full rounded-full bg-[#b88432]" style={{ width: `${Math.min(Math.max(modelRun.progress, 0), 100)}%` }} />
+                  </div>
+                )}
+                  <p className="mt-2">{modelRun.error ?? modelRun.message}</p>
+                </div>
+              )}
+            </section>
+
+            <section className="mt-7 border-t border-[#e3ded7] pt-5">
+              <div className="mb-3 text-lg font-medium tracking-[-0.02em] text-[#1d1c1a]">Workspace</div>
+              <div className="grid gap-2">
+                {workbench.folders.map((folder) => {
+                  const selected = selectedRole === folder.role;
+                  const Icon = folder.role === "code" ? Code2 : Folder;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      onClick={() => void handleSelectFolder(folder.role)}
+                      className={cn(
+                        "flex min-h-[70px] items-center gap-4 rounded-[15px] border px-4 py-3 text-left transition",
+                        selected
+                          ? "border-[#d8d1c8] bg-white text-[#181715] shadow-sm"
+                          : "border-[#e7e2dc] bg-white/70 hover:bg-white"
+                      )}
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] border border-[#e8e3dc] bg-[#fffefa] text-[#1d1c1a]">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[16px] font-semibold tracking-[-0.02em]">{ROLE_COPY[folder.role].label}</span>
+                        <span className="mt-0.5 block truncate text-sm text-[#5f5b55]">{folder.name}</span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {folder.permission !== "prompt" && (
+                          <span className="text-[10px] uppercase tracking-[0.12em] text-[#8c877f]">{PERMISSION_COPY[folder.permission]}</span>
+                        )}
+                        <ChevronRight className="h-5 w-5 text-[#4f4a44]" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </section>
 
             {(pendingApprovalEvents.length > 0 || adapterNotice) && (
-              <section className="border-t border-black/10 pt-4 dark:border-white/10">
+              <section className="mt-5 border-t border-[#e3ded7] pt-4">
                 {pendingApprovalEvents.length > 0 && (
                   <div className="grid gap-2">
                     {pendingApprovalEvents.map((event) => (
-                      <div key={event.id} className="rounded-2xl bg-black/[0.04] p-3 text-xs leading-relaxed dark:bg-white/[0.05]">
+                      <div key={event.id} className="rounded-2xl bg-[#f5f1ea] p-3 text-xs leading-relaxed text-[#5f5b55]">
                         <div className="font-semibold">Approval needed</div>
                         <p className="mt-1 opacity-70">{event.filePath ?? event.title}</p>
-                        <button type="button" onClick={() => void handleReviewSecret(event.id)} className="mt-2 rounded-full border border-black/10 px-3 py-1 font-semibold dark:border-white/10">Approve once</button>
+                        <button type="button" onClick={() => void handleReviewSecret(event.id)} className="mt-2 rounded-full border border-[#d8d1c8] px-3 py-1 font-semibold">Approve once</button>
                       </div>
                     ))}
                   </div>
                 )}
                 {adapterNotice && (
-                  <p className="mt-3 text-xs leading-relaxed text-stone-500 first:mt-0 dark:text-stone-400">{adapterNotice}</p>
+                  <p className="mt-3 text-xs leading-relaxed text-[#6e6861] first:mt-0">{adapterNotice}</p>
                 )}
               </section>
             )}
 
+            <div className="mt-auto flex items-center justify-between border-t border-[#e3ded7] pt-5 text-[#5f5b55]">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111] text-sm font-semibold text-white">N</span>
+                <span className="text-sm">cozac.dev</span>
+                <ChevronRight className="h-4 w-4 rotate-90" />
+              </div>
+              <Settings className="h-5 w-5" />
+            </div>
           </aside>
 
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-[32px] border border-black/10 bg-[#fffdf8] shadow-sm dark:border-white/10 dark:bg-[#1e1912]">
-            <div className="border-b border-black/10 px-5 py-4 dark:border-white/10">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 dark:text-stone-400">Conversation</div>
-              <div className="mt-1 text-lg font-semibold tracking-[-0.02em]">Talk to the local model, or ask it to work with selected files.</div>
-            </div>
-
+          <section className="flex min-h-0 flex-col overflow-hidden bg-[#fffefa]">
             <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
-              <div className="space-y-4 p-5">
+              <div className="space-y-3 px-9 py-6">
                 {messages.map((message) => (
                   <div
                     key={message.id}
                     className={cn(
-                      "max-w-[760px] rounded-[26px] p-4 text-sm leading-relaxed",
+                      "flex items-start gap-4",
                       message.role === "user"
-                        ? "ml-auto bg-[#17120b] text-white dark:bg-[#f5deb0] dark:text-[#17120b]"
-                        : "bg-[#f1eadc] text-stone-700 dark:bg-white/[0.07] dark:text-stone-200"
+                        ? "justify-end"
+                        : "justify-start"
                     )}
                   >
-                    <div className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] opacity-65">
-                      {message.role === "user" ? "You" : "Local Agent"}
+                    {message.role === "assistant" && (
+                      <span className="mt-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[#111] text-sm font-bold text-white">CZ</span>
+                    )}
+                    <div
+                      className={cn(
+                        "max-w-[760px] rounded-[24px] px-6 py-3 text-[15px] leading-[1.42] shadow-none",
+                        message.role === "user"
+                          ? "order-1 rounded-br-[10px] bg-[#262420] text-white"
+                          : "rounded-tl-[10px] bg-[#f5f1ec] text-[#38342f]"
+                      )}
+                    >
+                      <p className="whitespace-pre-wrap">{message.text}</p>
+                      {message.timestamp && (
+                        <div
+                          className={cn(
+                            "mt-3 text-sm",
+                            message.role === "user" ? "text-right text-white/60" : "text-[#8a837b]"
+                          )}
+                        >
+                          {message.timestamp}
+                        </div>
+                      )}
                     </div>
-                    <p className="whitespace-pre-wrap">{message.text}</p>
+                    {message.role === "user" && (
+                      <span className="order-2 mt-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#262420] text-sm font-semibold text-white">N</span>
+                    )}
                   </div>
                 ))}
-
-                {!modelReady && (
-                  <div className="max-w-[760px] rounded-[22px] border border-amber-500/25 bg-amber-100/70 p-3 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-100">
-                    <button
-                      type="button"
-                      onClick={() => void handleLoadModel().catch(() => undefined)}
-                      disabled={modelBusy}
-                      className="min-h-10 rounded-full bg-amber-500 px-4 font-semibold text-[#17120b] disabled:opacity-60"
-                    >
-                      {modelBusy ? "Loading local model..." : "Download/load model to start"}
-                    </button>
-                    <span className="ml-3 text-xs opacity-75">{modelRun.error ?? modelRun.message}</span>
-                  </div>
-                )}
               </div>
             </ScrollArea>
 
-            <div className={cn("border-t border-black/10 bg-[#fbf6ea] p-4 dark:border-white/10 dark:bg-[#18140f]", inShell ? "pb-24" : "")}>
-              <div className="flex gap-3">
+            <div className={cn("bg-[#fffefa] px-8 pb-4 pt-2", inShell ? "pb-24" : "")}>
+              <div className="flex items-end gap-3 rounded-[22px] border border-[#dfdbd4] bg-white px-5 py-2.5 shadow-[0_8px_28px_rgba(42,37,29,0.08)]">
                 <Textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
-                  className="min-h-[76px] flex-1 resize-none rounded-3xl border-black/10 bg-white/80 p-4 text-base shadow-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-white/10 dark:bg-white/[0.06]"
-                  placeholder="Ask a question, or try read README.md"
+                  className="min-h-[36px] flex-1 resize-none border-0 bg-transparent p-0 text-[17px] text-[#2a2926] shadow-none placeholder:text-[#9b9690] focus-visible:ring-0"
+                  placeholder="메시지를 입력하세요"
                 />
                 <button
                   type="button"
                   onClick={() => void handleSubmitPrompt()}
-                  className="min-h-[76px] rounded-3xl bg-amber-500 px-5 text-sm font-bold text-[#17120b] transition hover:scale-[1.02]"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#262420] text-white transition hover:scale-[1.04] hover:bg-[#171613]"
+                  aria-label="Send local prompt"
                 >
-                  Run
+                  <Send className="h-6 w-6" />
                 </button>
               </div>
-              <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">Everything here stays in this browser tab unless you explicitly choose a folder.</p>
             </div>
           </section>
         </main>

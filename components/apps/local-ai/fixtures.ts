@@ -54,27 +54,7 @@ export const DEFAULT_FOLDERS: LocalAgentFolderSummary[] = [
   },
 ];
 
-export const DEFAULT_EVENTS: LocalAgentToolEvent[] = [
-  {
-    id: "diagnostics",
-    title: "Diagnostics queued",
-    detail: "Browser, WebGPU, storage, CPU, and memory signals are checked before model selection.",
-    status: "queued",
-  },
-  {
-    id: "secret-policy",
-    title: "Secret operation guard armed",
-    detail: "Secret-like files require single-operation approval before read, edit, diff, RAG, log, or context use.",
-    status: "blocked",
-    approvalRequired: true,
-  },
-  {
-    id: "command-policy",
-    title: "Command request rejection ready",
-    detail: "Requests for package-manager, Git, script-runner, model-runner, or terminal commands are explained as out of scope.",
-    status: "complete",
-  },
-];
+export const DEFAULT_EVENTS: LocalAgentToolEvent[] = [];
 
 export const DEFAULT_DIFFS: LocalAgentDiffSummary[] = [
   {

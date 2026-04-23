@@ -41,9 +41,9 @@ export const APPS: AppConfig[] = [
     icon: "/local-ai.svg",
     description: "Browser-native local AI workbench",
     accentColor: "#7C3AED",
-    defaultPosition: { x: 120, y: 42 },
-    defaultSize: { width: 1040, height: 600 },
-    minSize: { width: 760, height: 500 },
+    defaultPosition: { x: 70, y: 20 },
+    defaultSize: { width: 1160, height: 620 },
+    minSize: { width: 900, height: 560 },
     menuBarTitle: "Local Agent",
   },
   {

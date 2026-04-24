@@ -20,7 +20,8 @@ test("recommends browser-local chat on phones even when folder access is unavail
   assert.equal(signals.browserName, "Safari");
   assert.equal(signals.osHint, "iOS");
   assert.equal(recommendation.status, "ready");
-  assert.equal(recommendation.tier, "gemma-4-e2b");
+  assert.equal(recommendation.tier, "gemma-3-270m-it");
+  assert.match(recommendation.reasons.join(" "), /phone-safe local runtime/i);
   assert.match(recommendation.reasons.join(" "), /folder-free local chat/i);
 });
 

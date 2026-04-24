@@ -56,6 +56,10 @@ export function probeLocalAiCapabilities(input: CapabilityProbeInput = {}): Capa
   };
 }
 
+function isPhoneLikeOs(osHint: string): boolean {
+  return osHint === "iOS" || osHint === "Android";
+}
+
 export function recommendLocalModel(signals: CapabilitySignals): ModelRecommendation {
   const reasons: string[] = [];
 
@@ -76,6 +80,20 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
 
   const cpuCores = signals.cpuCores ?? 0;
   const memoryGB = signals.memoryGB ?? 0;
+
+  if (isPhoneLikeOs(signals.osHint)) {
+    return {
+      tier: "gemma-3-270m-it",
+      status: signals.webGPU ? "ready" : "degraded",
+      label: "Gemma 3 270M phone-safe local runtime",
+      reasons: [
+        ...reasons,
+        signals.webGPU
+          ? "Phone/tablet browsers have tighter cache and memory limits; use the phone-safe local runtime instead of downloading Gemma 4 E2B/E4B in-browser."
+          : "Phone/tablet browser lacks WebGPU; use the phone-safe local runtime through WASM/CPU with degraded speed.",
+      ],
+    };
+  }
 
   if (!signals.webGPU) {
     return {

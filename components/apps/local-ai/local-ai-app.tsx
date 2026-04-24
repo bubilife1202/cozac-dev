@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Atom, CheckCircle2, ChevronRight, Download, LockKeyhole, Send, Settings, Zap } from "lucide-react";
+import { Atom, CheckCircle2, ChevronRight, Download, LockKeyhole, Send, Settings, Smartphone, Zap } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { useWindowFocus } from "@/lib/window-focus-context";
 import { WindowControls } from "@/components/window-controls";
 import {
   BrowserFolderAdapter,
+  RUNNABLE_LOCAL_MODEL_ID as PHONE_LOCAL_MODEL_ID,
   createLineDiffSummary,
   isCommandExecutionRequest,
   isSecretLikePath,
@@ -239,9 +240,10 @@ function buildDeviceSuitability(
 }
 
 function getRecommendedGemma4Tier(recommendation: LocalAgentModelRecommendation): ModelTier {
+  if (recommendation.tier === "fallback") return "phone-270m";
   if (recommendation.tier === "e2b") return "e2b";
   if (recommendation.tier === "e4b") return "e4b";
-  return "e2b";
+  return "phone-270m";
 }
 
 function describeGemma4Tier(
@@ -252,6 +254,17 @@ function describeGemma4Tier(
   const recommendedTier = getRecommendedGemma4Tier(recommendation);
   const memory = signals?.memoryGB ?? 0;
   const webgpu = signals?.webGPU ?? false;
+
+  if (tier === "phone-270m") {
+    return {
+      headline: "휴대폰에서 먼저 쓰는 로컬 런타임",
+      detail:
+        recommendation.tier === "fallback"
+          ? "현재 기기에서는 캐시/메모리 부담을 줄이기 위해 이 모델이 기본 선택입니다."
+          : "Gemma 4보다 작아서 모바일 브라우저에서 실제 로컬 대화 테스트에 더 안전합니다.",
+      status: recommendation.tier === "fallback" ? "recommended" : "fits",
+    };
+  }
 
   if (tier === "e2b") {
     return {
@@ -311,7 +324,7 @@ const RUNNABLE_LOCAL_MODEL_LABEL = "compatibility runtime";
 const GEMMA4_E2B_MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
 const GEMMA4_E4B_MODEL_ID = "onnx-community/gemma-4-E4B-it-ONNX";
 
-type ModelTier = "e2b" | "e4b" | "26b-a4b" | "31b";
+type ModelTier = "phone-270m" | "e2b" | "e4b" | "26b-a4b" | "31b";
 
 const MODEL_TIERS: Array<{
   id: ModelTier;
@@ -321,6 +334,14 @@ const MODEL_TIERS: Array<{
   badge?: string;
   icon: typeof Zap;
 }> = [
+  {
+    id: "phone-270m",
+    label: "Mobile local",
+    model: "270M",
+    description: "Phone-safe browser-local runtime",
+    badge: "Mobile",
+    icon: Smartphone,
+  },
   {
     id: "e2b",
     label: "Gemma 4",
@@ -356,12 +377,14 @@ const MODEL_TIERS: Array<{
 ];
 
 function getSelectedBrowserModelId(tier: ModelTier): string | null {
+  if (tier === "phone-270m") return PHONE_LOCAL_MODEL_ID;
   if (tier === "e2b") return GEMMA4_E2B_MODEL_ID;
   if (tier === "e4b") return GEMMA4_E4B_MODEL_ID;
   return null;
 }
 
 function getSelectedModelLabel(tier: ModelTier): string {
+  if (tier === "phone-270m") return "Mobile local 270M";
   if (tier === "e2b") return "Gemma 4 E2B";
   if (tier === "e4b") return "Gemma 4 E4B";
   if (tier === "26b-a4b") return "Gemma 4 26B A4B";

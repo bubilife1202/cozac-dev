@@ -3,19 +3,25 @@ import test from "node:test";
 
 import { probeLocalAiCapabilities, recommendLocalModel } from "../../lib/local-ai/diagnostics";
 
-test("reports unsupported state when folder access is unavailable", () => {
+test("recommends browser-local chat on phones even when folder access is unavailable", () => {
   const signals = probeLocalAiCapabilities({
     directoryPickerAvailable: false,
     hasIndexedDB: true,
     webGPU: true,
-    navigatorLike: { userAgent: "Firefox/124", hardwareConcurrency: 8, deviceMemory: 16 },
+    navigatorLike: {
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+      hardwareConcurrency: 6,
+      deviceMemory: 8,
+    },
   });
   const recommendation = recommendLocalModel(signals);
 
   assert.equal(signals.fileSystemAccess, false);
-  assert.equal(signals.browserName, "Firefox");
-  assert.equal(recommendation.status, "unsupported");
-  assert.equal(recommendation.tier, "unsupported");
+  assert.equal(signals.browserName, "Safari");
+  assert.equal(signals.osHint, "iOS");
+  assert.equal(recommendation.status, "ready");
+  assert.equal(recommendation.tier, "gemma-4-e2b");
+  assert.match(recommendation.reasons.join(" "), /folder-free local chat/i);
 });
 
 test("recommends degraded 270M smoke mode when WebGPU is missing", () => {

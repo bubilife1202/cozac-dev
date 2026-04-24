@@ -22,10 +22,10 @@ function detectBrowser(userAgent: string): string {
 }
 
 function detectOs(userAgent: string): string {
+  if (/iPhone|iPad|iPod/.test(userAgent)) return "iOS";
+  if (/Android/.test(userAgent)) return "Android";
   if (/Mac OS X|Macintosh/.test(userAgent)) return "macOS";
   if (/Windows NT/.test(userAgent)) return "Windows";
-  if (/Android/.test(userAgent)) return "Android";
-  if (/iPhone|iPad|iPod/.test(userAgent)) return "iOS";
   if (/Linux/.test(userAgent)) return "Linux";
   return "Unknown";
 }
@@ -60,12 +60,9 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
   const reasons: string[] = [];
 
   if (!signals.fileSystemAccess) {
-    return {
-      tier: "unsupported",
-      status: "unsupported",
-      label: "Folder access unsupported",
-      reasons: ["This browser does not expose user-selected folder access."],
-    };
+    reasons.push(
+      "Folder access is unavailable, so file read/write tools stay disabled; folder-free local chat can still run from browser storage.",
+    );
   }
 
   if (!signals.indexedDB || signals.privateModeLikely) {

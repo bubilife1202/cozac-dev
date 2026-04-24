@@ -130,7 +130,7 @@ function createCapabilityCards(): {
         status: capabilityStatus(signals.fileSystemAccess),
         detail: signals.fileSystemAccess
           ? "Directory picker is available; folder access still requires a user gesture."
-          : "This browser does not expose selected-folder access. Use Chromium desktop for full Local Mode.",
+          : "Folder picking is unavailable here; local chat/model download can still run from browser storage.",
       },
       {
         id: "webgpu",
@@ -183,11 +183,22 @@ function buildDeviceSuitability(
     signals.fileSystemAccess ? "Folder access on" : "Folder access off",
   ];
 
-  if (!signals.fileSystemAccess || !signals.indexedDB) {
+  if (!signals.indexedDB) {
     return {
       verdict: "blocked",
-      headline: "로컬 폴더/저장소 권한이 먼저 필요합니다",
-      body: "이 브라우저에서는 폴더 선택이나 브라우저 저장소가 막혀 있어서 Local Agent를 제대로 쓸 수 없습니다.",
+      headline: "브라우저 로컬 저장소가 먼저 필요합니다",
+      body: "이 브라우저에서는 IndexedDB 저장소가 막혀 있어서 모델/세션을 휴대폰 안에 받을 수 없습니다.",
+      chips,
+    };
+  }
+
+  if (!signals.fileSystemAccess) {
+    return {
+      verdict: "mixed",
+      headline: signals.webGPU ? "폴더 없이 휴대폰 로컬 채팅 가능" : "폴더 없이 가능하지만 속도는 느립니다",
+      body: signals.webGPU
+        ? "이 브라우저는 폴더 선택 API가 없어 파일 작업은 꺼두지만, 모델은 브라우저 저장소에 받아서 이 기기 안에서 대화할 수 있습니다."
+        : "폴더 선택은 안 되지만 브라우저 저장소는 살아 있습니다. WebGPU가 없어 가벼운 fallback 런타임만 현실적입니다.",
       chips,
     };
   }
@@ -565,7 +576,7 @@ export function LocalAgentApp({
     {
       id: "initial-greeting",
       role: "assistant",
-      text: "안녕하세요. 여기서는 Gemma 4 기준 적합도를 먼저 보고, 필요하면 로컬 런타임을 준비한 뒤 대화할 수 있습니다.\n파일 작업 전에는 Code / Materials / Output 폴더를 직접 지정하세요.",
+      text: "안녕하세요. 여기서는 Gemma 4 기준 적합도를 먼저 보고, 필요하면 로컬 런타임을 준비한 뒤 대화할 수 있습니다.\n휴대폰에서는 폴더 지정 없이도 브라우저 저장소에 모델을 받아 로컬 대화부터 쓸 수 있고, 파일 작업만 Code / Materials / Output 폴더 지정이 필요합니다.",
       timestamp: "11:52 AM",
     },
   ]);
@@ -1163,7 +1174,7 @@ export function LocalAgentApp({
               <div className="mb-3 rounded-[16px] border border-[#e7e2dc] bg-white px-4 py-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7d776f]">Local folders</div>
                 <p className="mt-1 text-sm leading-relaxed text-[#5f5b55]">
-                  파일 작업은 여기서 직접 지정한 로컬 폴더만 사용합니다. Code / Materials / Output 폴더를 각각 눈에 보이게 선택할 수 있어야 합니다.
+                  대화/모델 다운로드는 폴더 없이도 이 브라우저 안에서 로컬로 동작합니다. 파일 읽기/쓰기만 여기서 직접 지정한 로컬 폴더를 사용합니다.
                 </p>
                 <div className="mt-3 grid gap-2">
                   {workbench.folders.map((folder) => (
@@ -1284,7 +1295,7 @@ export function LocalAgentApp({
                 </button>
               </div>
               <p className="mt-3 text-xs leading-relaxed text-[#7a746d]">
-                대화는 바로 가능하지만, 코드/문서/출력 파일 작업은 위에서 로컬 폴더를 먼저 지정해야 합니다.
+                폴더 지정 없이도 대화는 로컬 런타임으로 바로 가능합니다. 파일 읽기/쓰기 요청만 위에서 로컬 폴더를 먼저 지정해야 합니다.
               </p>
             </div>
           </section>

@@ -1,15 +1,20 @@
 import type { CapabilitySignals, ModelRecommendation } from "./types";
 import { probeLocalAiCapabilities, recommendLocalModel } from "./diagnostics";
 
-export const RUNNABLE_LOCAL_MODEL_ID = "onnx-community/gemma-3-270m-it-ONNX" as const;
-export const RUNNABLE_LOCAL_MODEL_LABEL = "Gemma 3 270M IT (ONNX)" as const;
+export const RUNNABLE_LOCAL_MODEL_ID = "onnx-community/SmolLM2-135M-Instruct-ONNX" as const;
+export const RUNNABLE_LOCAL_MODEL_LABEL = "SmolLM2 135M Instruct (ONNX)" as const;
 export const RUNNABLE_LOCAL_MODEL_DTYPE = "q4" as const;
 export const GEMMA4_E2B_MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX" as const;
 export const GEMMA4_E2B_MODEL_LABEL = "Gemma 4 E2B" as const;
-export const GEMMA4_E2B_MODEL_DTYPE = "q4f16" as const;
+export const GEMMA4_E2B_MODEL_DTYPE = {
+  embed_tokens: "q8",
+  audio_encoder: "q8",
+  vision_encoder: "fp16",
+  decoder_model_merged: "q4",
+} as const;
 export const GEMMA4_E4B_MODEL_ID = "onnx-community/gemma-4-E4B-it-ONNX" as const;
 export const GEMMA4_E4B_MODEL_LABEL = "Gemma 4 E4B" as const;
-export const GEMMA4_E4B_MODEL_DTYPE = "q4f16" as const;
+export const GEMMA4_E4B_MODEL_DTYPE = GEMMA4_E2B_MODEL_DTYPE;
 export const LOCAL_AI_RUNNABLE_MODEL_ID = RUNNABLE_LOCAL_MODEL_ID;
 export const LOCAL_AI_RUNNABLE_MODEL_LABEL = RUNNABLE_LOCAL_MODEL_LABEL;
 export const LOCAL_AI_RUNNABLE_MODEL_DTYPE = RUNNABLE_LOCAL_MODEL_DTYPE;
@@ -74,7 +79,7 @@ export type LocalModelRuntimeSnapshot = {
   status: LocalModelStatus;
   modelId: string;
   label: string;
-  dtype: string;
+  dtype: BrowserLocalDType;
   device: LocalModelDevice;
   detail: string;
   progress?: number;
@@ -103,9 +108,12 @@ type PipelineProgress = {
 
 type PipelineOptions = {
   dtype?: string;
-  device?: LocalModelDevice;
+  device?: "webgpu" | "wasm";
   progress_callback?: (progress: PipelineProgress) => void;
 };
+
+type BrowserLocalDType = string | Record<string, string>;
+type BrowserTransformersDevice = "webgpu" | "wasm" | "cpu";
 
 type TextGenerationOptions = {
   max_new_tokens: number;
@@ -127,8 +135,8 @@ type Gemma4Processor = {
     messages: Array<{ role: string; content: Array<{ type: string; text: string }> }>,
     options?: { enable_thinking?: boolean; add_generation_prompt?: boolean },
   ): string;
-  batch_decode(output: unknown, options?: { skip_special_tokens?: boolean }): string[];
-  (
+  batch_decode(output: unknown, options?: { skip_special_tokens?: boolean }): string[] | Promise<string[]>;
+  call?(
     prompt: string,
     image?: null,
     audio?: null,
@@ -141,9 +149,12 @@ type Gemma4ConditionalModel = {
 };
 
 type TransformersRuntime = {
-  pipeline(task: "text-generation", model: typeof RUNNABLE_LOCAL_MODEL_ID, options?: PipelineOptions): Promise<TextGenerationPipeline>;
+  pipeline?(task: "text-generation", model: typeof RUNNABLE_LOCAL_MODEL_ID, options?: PipelineOptions): Promise<TextGenerationPipeline>;
   AutoProcessor?: {
     from_pretrained(modelId: BrowserLocalModelId, options?: Record<string, unknown>): Promise<Gemma4Processor>;
+  };
+  AutoModelForImageTextToText?: {
+    from_pretrained(modelId: typeof GEMMA4_E2B_MODEL_ID | typeof GEMMA4_E4B_MODEL_ID, options?: Record<string, unknown>): Promise<Gemma4ConditionalModel>;
   };
   Gemma4ForConditionalGeneration?: {
     from_pretrained(modelId: typeof GEMMA4_E2B_MODEL_ID | typeof GEMMA4_E4B_MODEL_ID, options?: Record<string, unknown>): Promise<Gemma4ConditionalModel>;
@@ -172,7 +183,7 @@ export type LoadedGemma4LocalModel = {
   kind: "gemma4";
   modelId: typeof GEMMA4_E2B_MODEL_ID | typeof GEMMA4_E4B_MODEL_ID;
   label: string;
-  dtype: string;
+  dtype: BrowserLocalDType;
   device: LocalModelDevice;
   processor: Gemma4Processor;
   model: Gemma4ConditionalModel;
@@ -183,7 +194,7 @@ export type LoadedBrowserLocalModel = LoadedRunnableLocalModel | LoadedGemma4Loc
 
 export type LoadRunnableLocalModelOptions = {
   transformers?: TransformersRuntime;
-  dtype?: string;
+  dtype?: BrowserLocalDType;
   preferWebGPU?: boolean;
   onProgress?: (progress: LocalModelProgress) => void;
 };
@@ -207,6 +218,9 @@ export function resetLocalModelEngineForTests(): void {
 }
 
 export function chooseLocalModelDevice(signals: CapabilitySignals): LocalModelDevice {
+  if (signals.osHint === "iOS" || signals.osHint === "Android") {
+    return "cpu";
+  }
   return signals.webGPU ? "webgpu" : "cpu";
 }
 
@@ -230,7 +244,7 @@ export function getRunnableLocalModelAvailability(signals: CapabilitySignals): R
     status: webgpu ? "ready" : "degraded",
     device: chooseLocalModelDevice(signals),
     reasons: webgpu
-      ? ["WebGPU is available for the runnable Gemma 270M smoke model."]
+      ? ["WebGPU is available for the runnable SmolLM2 135M smoke model."]
       : ["WebGPU is unavailable; Transformers.js will use CPU/WASM execution with degraded speed."],
   };
 }
@@ -271,7 +285,7 @@ function normalizeProgress(progress: PipelineProgress): LocalModelProgress {
 
 function getBrowserLocalModelInfo(modelId: BrowserLocalModelId): {
   label: string;
-  dtype: string;
+  dtype: BrowserLocalDType;
   family: "pipeline" | "gemma4";
 } {
   switch (modelId) {
@@ -290,10 +304,42 @@ function isGemma4ModelId(
   return modelId === GEMMA4_E2B_MODEL_ID || modelId === GEMMA4_E4B_MODEL_ID;
 }
 
+function isWebGpuAdapterUnavailableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no available adapters|webgpu.*adapter|adapter.*webgpu/i.test(message);
+}
+
+function dtypeCacheKey(dtype: BrowserLocalDType): string {
+  return typeof dtype === "string" ? dtype : JSON.stringify(dtype);
+}
+
+function runGemma4Processor(
+  processor: Gemma4Processor,
+  prompt: string,
+  image: null,
+  audio: null,
+  options: { add_special_tokens?: boolean },
+): Promise<Record<string, unknown>> {
+  type CallableProcessor = (
+    prompt: string,
+    image?: null,
+    audio?: null,
+    options?: { add_special_tokens?: boolean },
+  ) => Promise<Record<string, unknown>>;
+
+  if (typeof processor === "function") {
+    return (processor as CallableProcessor)(prompt, image, audio, options);
+  }
+  if (typeof processor.call === "function") {
+    return processor.call(prompt, image, audio, options);
+  }
+  throw new Error("Gemma 4 processor is not callable in this Transformers.js runtime.");
+}
+
 export async function loadRunnableLocalModel(options: LoadRunnableLocalModelOptions = {}): Promise<LoadedRunnableLocalModel> {
-  const dtype = options.dtype ?? RUNNABLE_LOCAL_MODEL_DTYPE;
+  const dtype = typeof options.dtype === "string" ? options.dtype : RUNNABLE_LOCAL_MODEL_DTYPE;
   const preferWebGPU = options.preferWebGPU ?? false;
-  const device: LocalModelDevice = preferWebGPU ? "webgpu" : "cpu";
+  let device: LocalModelDevice = preferWebGPU ? "webgpu" : "cpu";
 
   if (cachedEngine && cachedEngine.dtype === dtype && cachedEngine.device === device) {
     options.onProgress?.({ status: "ready", message: `${RUNNABLE_LOCAL_MODEL_LABEL} already loaded`, progress: 100 });
@@ -301,19 +347,41 @@ export async function loadRunnableLocalModel(options: LoadRunnableLocalModelOpti
   }
 
   const runtime = options.transformers ?? (await importTransformersRuntime());
+  if (!runtime.pipeline) {
+    throw new Error("Text-generation pipeline is unavailable in the installed @huggingface/transformers package.");
+  }
   options.onProgress?.({ status: "loading", message: `Downloading/loading ${RUNNABLE_LOCAL_MODEL_LABEL}`, progress: 0 });
 
-  const pipelineOptions: PipelineOptions = {
-    dtype,
-    progress_callback: (progress) => options.onProgress?.(normalizeProgress(progress)),
+  const createPipelineOptions = (targetDevice: LocalModelDevice, forceWasm = false): PipelineOptions => {
+    const pipelineOptions: PipelineOptions = {
+      dtype,
+      progress_callback: (progress) => options.onProgress?.(normalizeProgress(progress)),
+    };
+    if (targetDevice === "webgpu") {
+      pipelineOptions.device = "webgpu";
+    } else if (forceWasm) {
+      pipelineOptions.device = "wasm";
+    }
+    return pipelineOptions;
   };
-  if (preferWebGPU) {
-    pipelineOptions.device = "webgpu";
+
+  let generator: TextGenerationPipeline;
+  try {
+    generator = await runtime.pipeline("text-generation", RUNNABLE_LOCAL_MODEL_ID, createPipelineOptions(device));
+  } catch (error) {
+    if (!preferWebGPU || !isWebGpuAdapterUnavailableError(error)) {
+      throw error;
+    }
+    device = "cpu";
+    options.onProgress?.({
+      status: "loading",
+      message: "WebGPU adapter was unavailable; retrying the local model with CPU/WASM.",
+      progress: 0,
+    });
+    generator = await runtime.pipeline("text-generation", RUNNABLE_LOCAL_MODEL_ID, createPipelineOptions(device, true));
   }
 
-  const generator = await runtime.pipeline("text-generation", RUNNABLE_LOCAL_MODEL_ID, pipelineOptions);
-
-  cachedEngine = {
+  const loaded: LoadedRunnableLocalModel = {
     kind: "pipeline",
     modelId: RUNNABLE_LOCAL_MODEL_ID,
     label: RUNNABLE_LOCAL_MODEL_LABEL,
@@ -322,8 +390,9 @@ export async function loadRunnableLocalModel(options: LoadRunnableLocalModelOpti
     generator,
     runtime,
   };
+  cachedEngine = loaded;
   options.onProgress?.({ status: "ready", message: `${RUNNABLE_LOCAL_MODEL_LABEL} loaded locally`, progress: 100 });
-  return cachedEngine;
+  return loaded;
 }
 
 export function createLocalChatMessages(prompt: string, localContext?: string, systemPrompt?: string): LocalChatMessage[] {
@@ -409,7 +478,8 @@ async function loadGemma4LocalModel(
   const info = getBrowserLocalModelInfo(modelId);
   const preferWebGPU = options.preferWebGPU ?? true;
   const device: LocalModelDevice = preferWebGPU ? "webgpu" : "cpu";
-  const cacheKey = `${modelId}:${device}:${options.dtype ?? info.dtype}`;
+  const dtype = options.dtype ?? info.dtype;
+  const cacheKey = `${modelId}:${device}:${dtypeCacheKey(dtype)}`;
 
   const cached = cachedGemma4Engines.get(cacheKey);
   if (cached) {
@@ -418,7 +488,8 @@ async function loadGemma4LocalModel(
   }
 
   const runtime = options.transformers ?? (await importTransformersRuntime());
-  if (!runtime.AutoProcessor || !runtime.Gemma4ForConditionalGeneration) {
+  const modelLoader = runtime.AutoModelForImageTextToText ?? runtime.Gemma4ForConditionalGeneration;
+  if (!runtime.AutoProcessor || !modelLoader) {
     throw new Error("Gemma 4 runtime is unavailable in the installed @huggingface/transformers package.");
   }
 
@@ -427,9 +498,9 @@ async function loadGemma4LocalModel(
   const processor = await runtime.AutoProcessor.from_pretrained(modelId, {
     progress_callback: (progress: PipelineProgress) => options.onProgress?.(normalizeProgress(progress)),
   });
-  const model = await runtime.Gemma4ForConditionalGeneration.from_pretrained(modelId, {
-    dtype: options.dtype ?? info.dtype,
-    device,
+  const model = await modelLoader.from_pretrained(modelId, {
+    dtype,
+    device: device === "webgpu" ? "webgpu" : "wasm",
     progress_callback: (progress: PipelineProgress) => options.onProgress?.(normalizeProgress(progress)),
   });
 
@@ -437,7 +508,7 @@ async function loadGemma4LocalModel(
     kind: "gemma4",
     modelId,
     label: info.label,
-    dtype: options.dtype ?? info.dtype,
+    dtype,
     device,
     processor,
     model,
@@ -461,7 +532,7 @@ async function generateGemma4LocalAnswer(
     enable_thinking: false,
     add_generation_prompt: true,
   });
-  const inputs = await engine.processor(formattedPrompt, null, null, {
+  const inputs = await runGemma4Processor(engine.processor, formattedPrompt, null, null, {
     add_special_tokens: false,
   });
   const inputIds = inputs.input_ids as { dims?: number[] } | undefined;
@@ -476,7 +547,7 @@ async function generateGemma4LocalAnswer(
   const generated = Number.isInteger(inputLength)
     ? (outputs as { slice: (...args: unknown[]) => unknown }).slice(null, [inputLength, null])
     : outputs;
-  const decoded = engine.processor.batch_decode(generated, { skip_special_tokens: true });
+  const decoded = await engine.processor.batch_decode(generated, { skip_special_tokens: true });
   const text = String(decoded?.[0] ?? "").replace(/\s+/g, " ").trim();
   return { text, modelId: engine.modelId, device: engine.device };
 }
@@ -560,6 +631,8 @@ let sharedBrowserLocalModelId: BrowserLocalModelId | undefined;
 
 export type BrowserLocalModelLoadOptions = {
   modelId?: BrowserLocalModelId;
+  signals?: CapabilitySignals;
+  transformers?: TransformersRuntime;
   onProgress?: (progress: LocalModelRuntimeSnapshot) => void;
 };
 
@@ -575,8 +648,19 @@ export type BrowserLocalModelGenerateRequest = {
 
 function getSharedBrowserLocalModelEngine(
   modelId: BrowserLocalModelId,
+  signals?: CapabilitySignals,
+  transformers?: TransformersRuntime,
   onProgress?: (progress: LocalModelRuntimeSnapshot) => void,
 ): BrowserLocalModelEngine {
+  if (signals || transformers) {
+    return createBrowserLocalModelEngine({
+      signals: signals ?? probeLocalAiCapabilities(),
+      transformers,
+      modelId,
+      onStatusChange: onProgress,
+    });
+  }
+
   if (!sharedBrowserLocalModelEngine || sharedBrowserLocalModelId !== modelId) {
     sharedBrowserLocalModelId = modelId;
     sharedBrowserLocalModelEngine = createBrowserLocalModelEngine({
@@ -590,7 +674,7 @@ function getSharedBrowserLocalModelEngine(
 
 export async function loadBrowserLocalModel(options: BrowserLocalModelLoadOptions = {}): Promise<BrowserLocalModelEngine> {
   const modelId = (options.modelId as BrowserLocalModelId | undefined) ?? RUNNABLE_LOCAL_MODEL_ID;
-  const engine = getSharedBrowserLocalModelEngine(modelId, options.onProgress);
+  const engine = getSharedBrowserLocalModelEngine(modelId, options.signals, options.transformers, options.onProgress);
   await engine.load();
   return engine;
 }

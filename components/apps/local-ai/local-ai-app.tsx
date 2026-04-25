@@ -139,7 +139,7 @@ function createCapabilityCards(): {
         status: capabilityStatus(signals.webGPU, true),
         detail: signals.webGPU
           ? "WebGPU is available for browser-local model runtimes."
-          : "WebGPU is unavailable; Gemma 270M can still load through WASM with degraded speed and no cloud fallback.",
+          : "WebGPU is unavailable; the phone-safe SmolLM2 runtime can still load through WASM with degraded speed and no cloud fallback.",
       },
       {
         id: "indexeddb",
@@ -320,7 +320,7 @@ type ChatMessage = {
   timestamp?: string;
 };
 
-const RUNNABLE_LOCAL_MODEL_LABEL = "compatibility runtime";
+const RUNNABLE_LOCAL_MODEL_LABEL = "phone-safe local runtime";
 const GEMMA4_E2B_MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
 const GEMMA4_E4B_MODEL_ID = "onnx-community/gemma-4-E4B-it-ONNX";
 
@@ -337,7 +337,7 @@ const MODEL_TIERS: Array<{
   {
     id: "phone-270m",
     label: "Mobile local",
-    model: "270M",
+    model: "135M",
     description: "Phone-safe browser-local runtime",
     badge: "Mobile",
     icon: Smartphone,
@@ -384,7 +384,7 @@ function getSelectedBrowserModelId(tier: ModelTier): string | null {
 }
 
 function getSelectedModelLabel(tier: ModelTier): string {
-  if (tier === "phone-270m") return "Mobile local 270M";
+  if (tier === "phone-270m") return "Mobile local 135M";
   if (tier === "e2b") return "Gemma 4 E2B";
   if (tier === "e4b") return "Gemma 4 E4B";
   if (tier === "26b-a4b") return "Gemma 4 26B A4B";

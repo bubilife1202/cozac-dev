@@ -85,7 +85,7 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
     return {
       tier: "gemma-3-270m-it",
       status: signals.webGPU ? "ready" : "degraded",
-      label: "Gemma 3 270M phone-safe local runtime",
+      label: "SmolLM2 135M phone-safe local runtime",
       reasons: [
         ...reasons,
         signals.webGPU
@@ -99,8 +99,8 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
     return {
       tier: "gemma-3-270m-it",
       status: "degraded",
-      label: "Gemma 3 270M browser fallback",
-      reasons: ["WebGPU is unavailable; keep the current browser runtime on the runnable 270M ONNX fallback before attempting Gemma 4."],
+      label: "SmolLM2 135M browser fallback",
+      reasons: ["WebGPU is unavailable; keep the current browser runtime on the runnable 135M ONNX fallback before attempting Gemma 4."],
     };
   }
 
@@ -133,13 +133,13 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
       reasons,
     };
   } else {
-    reasons.push("Device CPU or memory signal is too thin for Gemma 4 in-browser. Keep the 270M fallback as the current runtime.");
+    reasons.push("Device CPU or memory signal is too thin for Gemma 4 in-browser. Keep the 135M fallback as the current runtime.");
   }
 
   return {
     tier: "gemma-3-270m-it",
     status: "ready",
-    label: "Gemma 3 270M browser fallback",
+    label: "SmolLM2 135M browser fallback",
     reasons,
   };
 }

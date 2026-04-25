@@ -3,11 +3,13 @@ import test from "node:test";
 
 import {
   RUNNABLE_LOCAL_MODEL_ID,
+  chooseLocalModelDevice,
   createLocalChatMessages,
   createLocalModelEngineState,
   extractGeneratedTextFromPipelineOutput,
   generateLocalModelAnswer,
   getRunnableLocalModelAvailability,
+  loadBrowserLocalModel,
   loadRunnableLocalModel,
   rejectCloudModelFallback,
   resetLocalModelEngineForTests,
@@ -52,7 +54,7 @@ function createMockTransformers(answer = "Mock local answer") {
   };
 }
 
-test("exposes the 270M Gemma model as the runnable smoke model while keeping Gemma 4 tiers as future recommendations", () => {
+test("exposes the phone-safe SmolLM2 model as the runnable smoke model while keeping Gemma 4 tiers as future recommendations", () => {
   const state = createLocalModelEngineState({
     fileSystemAccess: true,
     webGPU: true,
@@ -92,7 +94,19 @@ test("reports runnable model availability without requiring a cloud fallback", (
   assert.match(unavailable.reasons.join(" "), /storage/);
 });
 
-test("lazy-loads Transformers.js text-generation with the Gemma 270M model", async () => {
+test("uses CPU/WASM instead of WebGPU for phone-like browsers even when navigator.gpu exists", () => {
+  const device = chooseLocalModelDevice({
+    fileSystemAccess: true,
+    webGPU: true,
+    indexedDB: true,
+    browserName: "Chromium",
+    osHint: "Android",
+  });
+
+  assert.equal(device, "cpu");
+});
+
+test("lazy-loads Transformers.js text-generation with the phone-safe local model", async () => {
   resetLocalModelEngineForTests();
   const mock = createMockTransformers();
   const progressMessages: string[] = [];
@@ -114,6 +128,28 @@ test("lazy-loads Transformers.js text-generation with the Gemma 270M model", asy
   assert.equal(mock.calls[0]?.options.dtype, "fp32");
   assert.equal("device" in (mock.calls[0]?.options ?? {}), false);
   assert.equal(progressMessages.some((message) => message.includes("onnx/model.onnx")), true);
+});
+
+test("falls back to CPU when WebGPU reports no available adapter", async () => {
+  resetLocalModelEngineForTests();
+  const calls: Array<{ task: string; model: string; options: Record<string, unknown> }> = [];
+  const transformersRuntime = {
+    async pipeline(task: "text-generation", model: string, options?: Record<string, unknown>) {
+      calls.push({ task, model, options: options ?? {} });
+      if (options?.device === "webgpu") {
+        throw new Error("No available adapters.");
+      }
+      const generator = async () => [{ generated_text: "CPU fallback answer" }];
+      return Object.assign(generator, { tokenizer: { mock: true } });
+    },
+  };
+
+  const engine = await loadRunnableLocalModel({ transformers: transformersRuntime, preferWebGPU: true });
+
+  assert.equal(engine.device, "cpu");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0]?.options.device, "webgpu");
+  assert.equal(calls[1]?.options.device, "wasm");
 });
 
 test("generates a local answer from chat messages and strips pipeline chat output", async () => {
@@ -157,6 +193,113 @@ test("extracts string and chat outputs from Transformers.js pipeline results", (
     ]),
     "Answer",
   );
+});
+
+test("loads Gemma 4 E2B through AutoModelForImageTextToText with per-component dtype and CPU/WASM device", async () => {
+  resetLocalModelEngineForTests();
+  const calls: Array<{ kind: string; model: string; options: Record<string, unknown> }> = [];
+  const runtime = {
+    AutoProcessor: {
+      async from_pretrained(model: string, options?: Record<string, unknown>) {
+        calls.push({ kind: "processor", model, options: options ?? {} });
+        return {
+          apply_chat_template() {
+            return "formatted prompt";
+          },
+          async call() {
+            return { input_ids: { dims: [1, 4] } };
+          },
+          async batch_decode() {
+            return ["Gemma 4 E2B answered locally."];
+          },
+        };
+      },
+    },
+    AutoModelForImageTextToText: {
+      async from_pretrained(model: string, options?: Record<string, unknown>) {
+        calls.push({ kind: "model", model, options: options ?? {} });
+        return {
+          async generate() {
+            return { slice: () => "tokens" };
+          },
+        };
+      },
+    },
+  };
+
+  const engine = await loadBrowserLocalModel({
+    modelId: "onnx-community/gemma-4-E2B-it-ONNX",
+    transformers: runtime,
+    signals: {
+      fileSystemAccess: true,
+      webGPU: true,
+      indexedDB: true,
+      browserName: "Chromium",
+      osHint: "Android",
+    },
+  });
+
+  const modelCall = calls.find((call) => call.kind === "model");
+  assert.equal(modelCall?.model, "onnx-community/gemma-4-E2B-it-ONNX");
+  assert.deepEqual(modelCall?.options.dtype, {
+    embed_tokens: "q8",
+    audio_encoder: "q8",
+    vision_encoder: "fp16",
+    decoder_model_merged: "q4",
+  });
+  assert.equal(modelCall?.options.device, "wasm");
+  assert.equal(engine.getSnapshot().status, "ready");
+});
+
+test("invokes callable Gemma 4 processors without using Function.prototype.call", async () => {
+  resetLocalModelEngineForTests();
+  let receivedPrompt = "";
+  const runtime = {
+    AutoProcessor: {
+      async from_pretrained() {
+        const processor = Object.assign(
+          async (prompt: string) => {
+            receivedPrompt = prompt;
+            return { input_ids: { dims: [1, 2] } };
+          },
+          {
+            apply_chat_template() {
+              return "callable formatted prompt";
+            },
+            async batch_decode() {
+              return ["Callable processor answered locally."];
+            },
+          },
+        );
+        return processor;
+      },
+    },
+    AutoModelForImageTextToText: {
+      async from_pretrained() {
+        return {
+          async generate() {
+            return { slice: () => "tokens" };
+          },
+        };
+      },
+    },
+  };
+
+  const engine = await loadBrowserLocalModel({
+    modelId: "onnx-community/gemma-4-E2B-it-ONNX",
+    transformers: runtime,
+    signals: {
+      fileSystemAccess: true,
+      webGPU: false,
+      indexedDB: true,
+      browserName: "Chromium",
+      osHint: "Linux",
+    },
+  });
+  const answer = await engine.generate("hello");
+
+  assert.equal(receivedPrompt, "callable formatted prompt");
+  assert.equal(answer, "Callable processor answered locally.");
 });
 
 test("keeps cloud fallback explicitly disabled", async () => {

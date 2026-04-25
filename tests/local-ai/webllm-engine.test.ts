@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  WEBLLM_BROWSER_MODELS,
   WEBLLM_DEFAULT_MODEL_ID,
   WEBLLM_DEFAULT_MODEL_LABEL,
   extractWebLlmAnswerText,
   generateWebLlmAnswer,
+  getWebLlmBrowserModel,
   loadWebLlmLocalModel,
   resetWebLlmEngineForTests,
   type WebLlmChatMessage,
@@ -55,6 +57,24 @@ test("uses a WebLLM q4f32 model as the default instant browser chat runtime", ()
   assert.match(WEBLLM_DEFAULT_MODEL_LABEL, /WebLLM/i);
 });
 
+test("exposes several WebLLM browser models instead of a single hidden default", () => {
+  assert.ok(WEBLLM_BROWSER_MODELS.length >= 5);
+  assert.equal(WEBLLM_BROWSER_MODELS[0]?.id, WEBLLM_DEFAULT_MODEL_ID);
+  assert.equal(new Set(WEBLLM_BROWSER_MODELS.map((model) => model.id)).size, WEBLLM_BROWSER_MODELS.length);
+  assert.ok(WEBLLM_BROWSER_MODELS.some((model) => /SmolLM2/i.test(model.label)));
+  assert.ok(WEBLLM_BROWSER_MODELS.some((model) => /Llama/i.test(model.label)));
+  assert.ok(WEBLLM_BROWSER_MODELS.every((model) => model.id.endsWith("-MLC")));
+});
+
+test("returns model metadata for selected WebLLM ids and falls back to the default", () => {
+  const strongerQwen = getWebLlmBrowserModel("Qwen2.5-1.5B-Instruct-q4f32_1-MLC");
+
+  assert.equal(strongerQwen.id, "Qwen2.5-1.5B-Instruct-q4f32_1-MLC");
+  assert.match(strongerQwen.label, /1\.5B/);
+  assert.equal(getWebLlmBrowserModel("not-a-real-model").id, WEBLLM_DEFAULT_MODEL_ID);
+  assert.equal(getWebLlmBrowserModel().id, WEBLLM_DEFAULT_MODEL_ID);
+});
+
 test("loads WebLLM through CreateMLCEngine and reports download progress", async () => {
   resetWebLlmEngineForTests();
   const mock = createMockWebLlmRuntime();
@@ -74,17 +94,34 @@ test("loads WebLLM through CreateMLCEngine and reports download progress", async
   assert.equal(progressMessages.some((message) => /Downloading model/i.test(message)), true);
 });
 
+test("loads a selected WebLLM browser model instead of forcing the default", async () => {
+  resetWebLlmEngineForTests();
+  const mock = createMockWebLlmRuntime();
+
+  const session = await loadWebLlmLocalModel({
+    modelId: "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
+    runtime: mock.runtime,
+  });
+
+  assert.equal(session.modelId, "Qwen2.5-1.5B-Instruct-q4f32_1-MLC");
+  assert.match(session.label, /1\.5B/);
+  assert.equal(mock.createCalls[0]?.modelId, "Qwen2.5-1.5B-Instruct-q4f32_1-MLC");
+});
+
 test("generates a normal chat answer with the loaded WebLLM engine", async () => {
   resetWebLlmEngineForTests();
   const mock = createMockWebLlmRuntime();
-  const session = await loadWebLlmLocalModel({ runtime: mock.runtime });
+  const session = await loadWebLlmLocalModel({
+    modelId: "Llama-3.2-1B-Instruct-q4f32_1-MLC",
+    runtime: mock.runtime,
+  });
 
   const result = await generateWebLlmAnswer("안녕", {
     engine: session,
     maxNewTokens: 64,
   });
 
-  assert.equal(result.modelId, WEBLLM_DEFAULT_MODEL_ID);
+  assert.equal(result.modelId, "Llama-3.2-1B-Instruct-q4f32_1-MLC");
   assert.match(result.text, /안녕|브라우저|로컬/);
   assert.equal(mock.completionCalls.length, 1);
   const messages = mock.completionCalls[0]?.messages as WebLlmChatMessage[];

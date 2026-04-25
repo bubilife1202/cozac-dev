@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Atom, CheckCircle2, Download, Send, Smartphone, Zap } from "lucide-react";
+import { CheckCircle2, Download, Send } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -9,13 +9,12 @@ import { useWindowFocus } from "@/lib/window-focus-context";
 import { WindowControls } from "@/components/window-controls";
 import {
   BrowserFolderAdapter,
-  WEBLLM_DEFAULT_MODEL_ID as MOBILE_LOCAL_MODEL_ID,
+  WEBLLM_BROWSER_MODELS,
   WEBLLM_DEFAULT_MODEL_LABEL,
   clearLocalAiBrowserStorage,
   createLineDiffSummary,
-  getBrowserInstallTier,
   getChatInputKeyIntent,
-  getModelInstallCopy,
+  getWebLlmBrowserModel,
   isCommandExecutionRequest,
   isSecretLikePath,
   openLocalAiDatabase,
@@ -244,72 +243,6 @@ function buildDeviceSuitability(
   };
 }
 
-function getRecommendedGemma4Tier(recommendation: LocalAgentModelRecommendation): ModelTier {
-  return getBrowserInstallTier(
-    recommendation.tier === "fallback" ? "smollm2-135m-instruct" : recommendation.tier === "e2b" ? "gemma-4-e2b" : recommendation.tier === "e4b" ? "gemma-4-e4b" : "unsupported",
-  );
-}
-
-function describeGemma4Tier(
-  tier: ModelTier,
-  recommendation: LocalAgentModelRecommendation,
-  signals: ReturnType<typeof probeLocalAiCapabilities> | null,
-): { headline: string; detail: string; status: "recommended" | "fits" | "heavy" | "avoid" } {
-  const recommendedTier = getRecommendedGemma4Tier(recommendation);
-  const memory = signals?.memoryGB ?? 0;
-  const webgpu = signals?.webGPU ?? false;
-
-  if (tier === "mobile-135m") {
-    return {
-      headline: "휴대폰에서 먼저 쓰는 로컬 런타임",
-      detail:
-        recommendation.tier === "fallback"
-          ? "현재 기기에서는 캐시/메모리 부담을 줄이기 위해 이 모델이 기본 선택입니다."
-          : "Gemma 4보다 작아서 모바일 브라우저에서 실제 로컬 대화 테스트에 더 안전합니다.",
-      status: recommendation.tier === "fallback" ? "recommended" : "fits",
-    };
-  }
-
-  if (tier === "e2b") {
-    return {
-      headline: "품질 모델 후보 — 별도 설치/검증 필요",
-      detail:
-        recommendedTier === "mobile-135m"
-          ? "이 PC에서 돌려볼 수는 있지만 첫 대화 자동 설치 대상은 아닙니다. 즉시 응답은 WebLLM Qwen2.5 0.5B q4f32로 시작하세요."
-          : "이 PC는 E4B도 후보지만, 브라우저에서 먼저 설치하고 답변을 확인할 안정 경로는 E2B입니다.",
-      status: recommendedTier === "e2b" ? "recommended" : "fits",
-    };
-  }
-
-  if (tier === "e4b") {
-    return {
-      headline: "이 PC에서 시도 가능한 다음 후보",
-      detail:
-        recommendation.tier === "e4b"
-          ? "CPU / 메모리 / WebGPU 신호상 후보는 맞지만, 첫 자동 응답과 설치 대상은 아닙니다. 먼저 Mobile 135M으로 정상 응답을 확인하세요."
-          : "E4B는 가능할 수 있지만 지금 브라우저 신호상 E2B보다 무겁습니다.",
-      status: recommendation.tier === "e4b" ? "heavy" : webgpu ? "heavy" : "avoid",
-    };
-  }
-
-  if (tier === "26b-a4b") {
-    return {
-      headline: "브라우저보다는 네이티브 런타임용",
-      detail:
-        webgpu && memory >= 24
-          ? "32GB급 기기에서도 브라우저보다는 Ollama 같은 네이티브 런타임에 더 가깝습니다."
-          : "이 등급부터는 브라우저 로컬보다는 네이티브 런타임/워크스테이션 영역입니다.",
-      status: "heavy",
-    };
-  }
-
-  return {
-    headline: "현재 브라우저 로컬 범위를 넘습니다",
-    detail: "31B는 이 기기에서 브라우저 로컬 모델로 권하지 않습니다. 서버나 고성능 워크스테이션이 맞습니다.",
-    status: "avoid",
-  };
-}
-
 type PendingSecretOperation = {
   role: LocalAgentFolderRole;
   path: string;
@@ -323,76 +256,6 @@ type ChatMessage = {
   text: string;
   timestamp?: string;
 };
-
-const GEMMA4_E2B_MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
-const GEMMA4_E4B_MODEL_ID = "onnx-community/gemma-4-E4B-it-ONNX";
-
-type ModelTier = "mobile-135m" | "e2b" | "e4b" | "26b-a4b" | "31b";
-
-const MODEL_TIERS: Array<{
-  id: ModelTier;
-  label: string;
-  model: string;
-  description: string;
-  badge?: string;
-  icon: typeof Zap;
-}> = [
-  {
-    id: "mobile-135m",
-    label: "WebLLM local",
-    model: "Qwen 0.5B",
-    description: "WebLLM q4f32 browser chat runtime",
-    badge: "Default",
-    icon: Smartphone,
-  },
-  {
-    id: "e2b",
-    label: "Gemma 4",
-    model: "E2B",
-    description: "Smallest on-device Gemma 4 model",
-    badge: "Edge",
-    icon: Zap,
-  },
-  {
-    id: "e4b",
-    label: "Gemma 4",
-    model: "E4B",
-    description: "Best local default for stronger laptops",
-    badge: "Candidate",
-    icon: Atom,
-  },
-  {
-    id: "26b-a4b",
-    label: "Gemma 4",
-    model: "26B A4B",
-    description: "Workstation-class MoE model",
-    badge: "Heavy",
-    icon: Atom,
-  },
-  {
-    id: "31b",
-    label: "Gemma 4",
-    model: "31B",
-    description: "Largest dense Gemma 4 model",
-    badge: "Server",
-    icon: Zap,
-  },
-];
-
-function getSelectedBrowserModelId(tier: ModelTier): string | null {
-  if (tier === "mobile-135m") return MOBILE_LOCAL_MODEL_ID;
-  if (tier === "e2b") return GEMMA4_E2B_MODEL_ID;
-  if (tier === "e4b") return GEMMA4_E4B_MODEL_ID;
-  return null;
-}
-
-function getSelectedModelLabel(tier: ModelTier): string {
-  if (tier === "mobile-135m") return "WebLLM Qwen 0.5B";
-  if (tier === "e2b") return "Gemma 4 E2B";
-  if (tier === "e4b") return "Gemma 4 E4B";
-  if (tier === "26b-a4b") return "Gemma 4 26B A4B";
-  return "Gemma 4 31B";
-}
 
 type LocalModelUiStatus = "idle" | "loading" | "ready" | "generating" | "error";
 
@@ -578,10 +441,9 @@ export function LocalAgentApp({
   const externalWorkbench = useMemo(() => mergeWorkbenchState(state), [state]);
   const [workbench, setWorkbench] = useState<LocalAgentWorkbenchState>(externalWorkbench);
   const [selectedRole, setSelectedRole] = useState<LocalAgentFolderRole>("code");
-  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("mobile-135m");
+  const [selectedWebLlmModelId, setSelectedWebLlmModelId] = useState(WEBLLM_BROWSER_MODELS[0]?.id ?? "Qwen2.5-0.5B-Instruct-q4f32_1-MLC");
   const [prompt, setPrompt] = useState("");
   const [adapterNotice, setAdapterNotice] = useState<string | null>(null);
-  const [detectedSignals, setDetectedSignals] = useState<ReturnType<typeof probeLocalAiCapabilities> | null>(null);
   const [deviceSuitability, setDeviceSuitability] = useState<DeviceSuitability>(() =>
     buildDeviceSuitability(
       probeLocalAiCapabilities({
@@ -602,7 +464,7 @@ export function LocalAgentApp({
     {
       id: "initial-greeting",
       role: "assistant",
-      text: "WebLLM처럼 바로 쓰는 흐름으로 바꿨습니다. Install WebLLM fast model을 누르면 Qwen2.5 0.5B q4f32 모델을 브라우저 캐시에 받고, Ready 이후 '안녕' 같은 일반 대화에 바로 답합니다.\nGemma 4 E2B/E4B는 이 PC에서 시도 가능한 품질 후보지만 첫 자동 설치 대상이 아닙니다. 설치를 지우려면 Clear downloaded model을 누르세요.",
+      text: "WebLLM처럼 바로 쓰는 흐름으로 바꿨습니다. 왼쪽에서 Qwen2.5, SmolLM2, Llama 같은 브라우저 모델을 고르고 Download selected model을 누르면 모델을 브라우저 캐시에 받습니다. Ready 이후 '안녕' 같은 일반 대화에 바로 답합니다.\nGemma 4 E2B/E4B는 이 PC에서 시도 가능한 품질 후보지만 이 화면의 첫 흐름은 WebLLM 모델 선택과 채팅입니다. 설치를 지우려면 Clear downloaded model을 누르세요.",
       timestamp: "11:52 AM",
     },
   ]);
@@ -629,7 +491,6 @@ export function LocalAgentApp({
       capabilities,
       modelRecommendation: recommendation,
     }));
-    setDetectedSignals(signals);
     setDeviceSuitability(buildDeviceSuitability(signals, recommendation));
 
 
@@ -642,10 +503,6 @@ export function LocalAgentApp({
         setAdapterNotice(error instanceof Error ? error.message : "Browser storage is unavailable for Local Agent state.");
       });
   }, [state]);
-
-  useEffect(() => {
-    setSelectedModelTier(getRecommendedGemma4Tier(workbench.modelRecommendation));
-  }, [workbench.modelRecommendation]);
 
   const selectedFolder = useMemo(
     () => workbench.folders.find((folder) => folder.role === selectedRole) ?? workbench.folders[0],
@@ -826,28 +683,12 @@ export function LocalAgentApp({
     }));
   }, []);
 
-  const handleLoadModel = useCallback(async (tierOverride?: ModelTier) => {
-    const modelTier = tierOverride ?? selectedModelTier;
-    const selectedModelId = getSelectedBrowserModelId(modelTier);
-    const selectedModelLabel = getSelectedModelLabel(modelTier);
-    if (!selectedModelId) {
-      const message = `${selectedModelLabel}는 현재 브라우저에서 바로 돌리는 대신 Ollama 같은 네이티브 로컬 런타임 쪽이 맞습니다.`;
-      setModelRun({
-        status: "error",
-        message: "Selected model is not browser-runnable.",
-        error: message,
-      });
-      addEvent({
-        title: "Browser runtime unavailable for selected model",
-        detail: message,
-        status: "blocked",
-      });
-      throw new Error(message);
-    }
+  const handleLoadModel = useCallback(async (modelIdOverride?: string) => {
+    const selectedModel = getWebLlmBrowserModel(modelIdOverride ?? selectedWebLlmModelId);
 
     setModelRun({
       status: "loading",
-      message: `Preparing ${selectedModelLabel}; model files stay in the browser cache/runtime.`,
+      message: `Downloading/loading ${selectedModel.shortLabel}; model files stay in this browser cache.`,
       progress: 0,
     });
 
@@ -855,21 +696,21 @@ export function LocalAgentApp({
       const engine = modelEngineRef.current ?? (await resolveLocalModelEngine());
       modelEngineRef.current = engine;
       const session = await engine.load({
-        modelId: selectedModelId,
+        modelId: selectedModel.id,
         onProgress: (progress: unknown) => handleModelProgress(progress, "loading"),
       });
       modelSessionRef.current = session;
-      loadedModelIdRef.current = selectedModelId;
+      loadedModelIdRef.current = selectedModel.id;
       setModelRun((current) => ({
         ...current,
         status: "ready",
-        message: `${selectedModelLabel} is loaded locally and ready to answer in this browser tab.`,
+        message: `${selectedModel.shortLabel} is ready. Type 안녕 and the answer stays inside this browser tab.`,
         progress: 100,
         error: undefined,
       }));
       addEvent({
         title: "Local model loaded",
-        detail: `${selectedModelId} loaded through the browser-local model engine. No chat route, localhost bridge, or cloud fallback was used by the UI.`,
+        detail: `${selectedModel.id} loaded through WebLLM. No chat route, localhost bridge, or cloud fallback was used by the UI.`,
         status: "complete",
       });
       return session;
@@ -887,44 +728,29 @@ export function LocalAgentApp({
       });
       throw error;
     }
-  }, [addEvent, handleModelProgress, selectedModelTier]);
+  }, [addEvent, handleModelProgress, selectedWebLlmModelId]);
 
   const answerWithLocalModel = useCallback(
     async (userPrompt: string, localContext?: string) => {
-      const selectedCandidateModelId = getSelectedBrowserModelId(selectedModelTier);
-      const browserChatTier =
-        (selectedModelTier === "e2b" || selectedModelTier === "e4b") && loadedModelIdRef.current !== selectedCandidateModelId
-          ? getRecommendedGemma4Tier(workbench.modelRecommendation)
-          : selectedModelTier;
-      if (browserChatTier !== selectedModelTier) {
-        setSelectedModelTier(browserChatTier);
-        appendChatMessage("assistant", "Gemma 4는 품질 모델 후보라서 자동으로 무거운 설치를 시작하지 않습니다. 먼저 WebLLM Qwen2.5 0.5B q4f32로 즉시 응답을 확인합니다.");
-      }
-      const selectedModelId = getSelectedBrowserModelId(browserChatTier);
-      const selectedModelLabel = getSelectedModelLabel(browserChatTier);
-      if (!selectedModelId) {
-        const message = `${selectedModelLabel}는 현재 브라우저 로컬 채팅 런타임이 아니라 네이티브 로컬 런타임(Ollama류) 대상으로 보는 게 맞습니다.`;
-        appendChatMessage("assistant", message);
-        throw new Error(message);
-      }
+      const selectedModel = getWebLlmBrowserModel(selectedWebLlmModelId);
       const engine = modelEngineRef.current ?? (await resolveLocalModelEngine());
       modelEngineRef.current = engine;
-      const needsReload = loadedModelIdRef.current !== selectedModelId;
+      const needsReload = loadedModelIdRef.current !== selectedModel.id;
       if (needsReload) {
         modelSessionRef.current = null;
       }
-      const session = modelSessionRef.current ?? (await handleLoadModel(browserChatTier));
+      const session = modelSessionRef.current ?? (await handleLoadModel(selectedModel.id));
 
       setModelRun((current) => ({
         ...current,
         status: "generating",
-        message: `Generating with ${selectedModelLabel}...`,
+        message: `Generating with ${selectedModel.shortLabel}...`,
         error: undefined,
       }));
 
       const output = await engine.generate({
         prompt: userPrompt,
-        modelId: selectedModelId,
+        modelId: selectedModel.id,
         model: session,
         session,
         localContext,
@@ -947,7 +773,7 @@ export function LocalAgentApp({
         status: "complete",
       });
     },
-    [addEvent, appendChatMessage, handleLoadModel, handleModelProgress, selectedModelTier, workbench.modelRecommendation]
+    [addEvent, appendChatMessage, handleLoadModel, handleModelProgress, selectedWebLlmModelId]
   );
 
   const handleSubmitPrompt = useCallback(async () => {
@@ -1030,7 +856,7 @@ export function LocalAgentApp({
     loadedModelIdRef.current = null;
     setModelRun({
       status: "idle",
-      message: "Local model storage was reset. Install WebLLM fast model again to chat.",
+      message: "Local model storage was reset. Choose a model and click Download selected model again to chat.",
       progress: undefined,
       answer: undefined,
       error: undefined,
@@ -1041,7 +867,7 @@ export function LocalAgentApp({
       ? `Reset attempted, but some storage could not be cleared: ${result.errors.join("; ")}`
       : `Deleted Local Agent IndexedDB${result.deletedDatabase ? "" : " (not present or blocked)"} and ${result.deletedCaches.length} model/cache bucket(s).`;
     addEvent({ title: "Local model storage cleared", detail, status: result.errors.length ? "blocked" : "complete" });
-    appendChatMessage("assistant", result.errors.length ? detail : "로컬 모델/세션 저장소를 지웠습니다. 다시 쓰려면 Install WebLLM fast model을 누르세요.");
+    appendChatMessage("assistant", result.errors.length ? detail : "로컬 모델/세션 저장소를 지웠습니다. 다시 쓰려면 모델을 고르고 Download selected model을 누르세요.");
   }, [addEvent, appendChatMessage]);
 
   const handleReviewSecret = useCallback(
@@ -1074,19 +900,13 @@ export function LocalAgentApp({
     [onReviewSecretOperation, readPath, writePath]
   );
 
-  const selectedBrowserModelId = getSelectedBrowserModelId(selectedModelTier);
-  const recommendedInstallTier = getRecommendedGemma4Tier(workbench.modelRecommendation);
-  const currentInstallTier: ModelTier = recommendedInstallTier;
-  const installCopy = getModelInstallCopy({ selectedTier: selectedModelTier, installTier: currentInstallTier });
+  const selectedWebLlmModel = getWebLlmBrowserModel(selectedWebLlmModelId);
   const modelBusy = modelRun.status === "loading" || modelRun.status === "generating";
-  const modelReady = modelRun.status === "ready" && loadedModelIdRef.current === selectedBrowserModelId;
+  const modelReady = modelRun.status === "ready" && loadedModelIdRef.current === selectedWebLlmModel.id;
   const pendingApprovalEvents = workbench.events.filter((event) => event.approvalRequired).slice(0, 3);
-  const handleInstallRecommendedModel = useCallback(async () => {
-    if (selectedModelTier !== currentInstallTier) {
-      setSelectedModelTier(currentInstallTier);
-    }
-    await handleLoadModel(currentInstallTier);
-  }, [currentInstallTier, handleLoadModel, selectedModelTier]);
+  const handleInstallSelectedModel = useCallback(async () => {
+    await handleLoadModel(selectedWebLlmModel.id);
+  }, [handleLoadModel, selectedWebLlmModel.id]);
 
   return (
     <div
@@ -1133,26 +953,51 @@ export function LocalAgentApp({
             <section className="rounded-3xl border border-[#ddd5ca] bg-white p-4 shadow-[0_14px_40px_rgba(35,31,25,0.06)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9a7240]">Model</div>
-                  <div className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[#171615]">WebLLM Qwen 0.5B</div>
-                  <p className="mt-1 text-sm leading-relaxed text-[#67615a]">브라우저 캐시에 받고 바로 대화하는 기본 모델입니다.</p>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9a7240]">Select browser model</div>
+                  <div className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[#171615]">{selectedWebLlmModel.shortLabel}</div>
+                  <p className="mt-1 text-sm leading-relaxed text-[#67615a]">WebLLM 모델을 고르고 브라우저 캐시에 다운로드한 뒤 이 탭에서 바로 채팅합니다.</p>
                 </div>
-                <span className="rounded-full bg-[#f2eadf] px-2.5 py-1 text-[11px] font-semibold text-[#8a6332]">Default</span>
+                <span className="rounded-full bg-[#f2eadf] px-2.5 py-1 text-[11px] font-semibold text-[#8a6332]">{selectedWebLlmModel.speedLabel}</span>
               </div>
 
-              <div className="mt-4 rounded-2xl bg-[#f8f4ed] p-3 text-sm leading-relaxed text-[#514c46]">
-                <div className="font-semibold text-[#201d19]">{installCopy.headline}</div>
-                <p className="mt-1">{installCopy.detail}</p>
+              <div className="mt-4 grid gap-2">
+                {WEBLLM_BROWSER_MODELS.map((model) => (
+                  <button
+                    key={model.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedWebLlmModelId(model.id);
+                      if (loadedModelIdRef.current !== model.id) {
+                        modelSessionRef.current = null;
+                        setModelRun({
+                          status: "idle",
+                          message: `${model.shortLabel} selected. Download selected model to chat locally.`,
+                        });
+                      }
+                    }}
+                    className={cn(
+                      "w-full rounded-2xl border px-3 py-2.5 text-left transition hover:bg-[#fffdf8]",
+                      selectedWebLlmModel.id === model.id ? "border-[#171615] bg-[#fff8ea]" : "border-[#e6e0d8] bg-white",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-sm font-semibold text-[#211f1b]">{model.shortLabel}</span>
+                      <span className="rounded-full bg-[#f3eee7] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#81786e]">{model.sizeLabel}</span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#777068]">{model.description}</p>
+                  </button>
+                ))}
               </div>
+              <p className="mt-3 text-xs leading-relaxed text-[#81786e]">Quick picks include Qwen2.5 0.5B, SmolLM2 360M, Llama 3.2 1B, Qwen2.5 1.5B.</p>
 
               <button
                 type="button"
-                onClick={() => void handleInstallRecommendedModel().catch(() => undefined)}
+                onClick={() => void handleInstallSelectedModel().catch(() => undefined)}
                 disabled={modelBusy}
                 className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-[#171615] px-4 py-3 text-[15px] font-semibold text-white transition hover:bg-[#2a2824] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-4 w-4" />
-                {modelReady ? "WebLLM model ready" : modelBusy ? "Downloading / loading..." : "Install WebLLM fast model"}
+                {modelReady ? `${selectedWebLlmModel.shortLabel} ready` : modelBusy ? "Downloading / loading..." : "Download selected model"}
               </button>
               <button
                 type="button"
@@ -1181,32 +1026,12 @@ export function LocalAgentApp({
 
             <details className="rounded-3xl border border-[#e3ded6] bg-white p-4">
               <summary className="cursor-pointer list-none text-sm font-semibold text-[#211f1b] marker:hidden">
-                Advanced candidates
-                <span className="ml-2 text-xs font-normal text-[#81786e]">Gemma options</span>
+                Advanced notes
+                <span className="ml-2 text-xs font-normal text-[#81786e]">Gemma stays separate</span>
               </summary>
-              <div className="mt-3 grid gap-2">
-                {MODEL_TIERS.filter((tier) => tier.id !== "mobile-135m").map((tier) => {
-                  const descriptor = describeGemma4Tier(tier.id, workbench.modelRecommendation, detectedSignals);
-                  return (
-                    <button
-                      key={tier.id}
-                      type="button"
-                      onClick={() => setSelectedModelTier(tier.id)}
-                      className={cn(
-                        "w-full rounded-2xl border px-3 py-2.5 text-left transition hover:bg-[#fffdf8]",
-                        selectedModelTier === tier.id ? "border-[#b9975d] bg-[#fff8ea]" : "border-[#e6e0d8] bg-white",
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold text-[#211f1b]">{tier.label} {tier.model}</span>
-                        <span className="rounded-full bg-[#f3eee7] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#81786e]">{tier.badge}</span>
-                      </div>
-                      <p className="mt-1 text-xs leading-relaxed text-[#777068]">{descriptor.headline}</p>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-3 text-xs leading-relaxed text-[#81786e]">Gemma 계열은 고급 후보입니다. 첫 응답은 WebLLM 모델로 검증합니다.</p>
+              <p className="mt-3 text-sm leading-relaxed text-[#67615a]">
+                Gemma 4 E2B/E4B는 이 PC에서 따로 검증할 품질 후보입니다. 이 화면의 기본 흐름은 WebLLM 모델 선택 → Download selected model → Ready → chat입니다.
+              </p>
             </details>
 
             <details className="rounded-3xl border border-[#e3ded6] bg-white p-4">
@@ -1246,17 +1071,17 @@ export function LocalAgentApp({
                 <div className="flex flex-col gap-3 rounded-3xl border border-[#e2cfae] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9a7240]">One click setup</div>
-                    <div className="mt-1 text-base font-semibold text-[#171615]">Install WebLLM fast model, then chat.</div>
-                    <p className="mt-1 text-sm leading-relaxed text-[#67615a]">다운로드가 끝나면 상태가 Ready로 바뀝니다. 삭제는 Clear downloaded model입니다.</p>
+                    <div className="mt-1 text-base font-semibold text-[#171615]">Download selected model, then chat.</div>
+                    <p className="mt-1 text-sm leading-relaxed text-[#67615a]">선택 모델: {selectedWebLlmModel.shortLabel}. 다운로드가 끝나면 상태가 Ready로 바뀝니다.</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => void handleInstallRecommendedModel().catch(() => undefined)}
+                    onClick={() => void handleInstallSelectedModel().catch(() => undefined)}
                     disabled={modelBusy}
                     className="flex min-h-[46px] shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#171615] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#2a2824] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Download className="h-4 w-4" />
-                    {modelBusy ? "Downloading..." : "Install WebLLM fast model"}
+                    {modelBusy ? "Downloading..." : "Download selected model"}
                   </button>
                 </div>
               </div>

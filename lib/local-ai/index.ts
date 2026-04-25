@@ -8,12 +8,14 @@ export * from "./embeddings";
 export * from "./file-system-adapter";
 export * from "./model-engine";
 export {
+  WEBLLM_BROWSER_MODELS,
   WEBLLM_DEFAULT_MODEL_DETAIL,
   WEBLLM_DEFAULT_MODEL_ID,
   WEBLLM_DEFAULT_MODEL_LABEL,
   createWebLlmChatMessages,
   extractWebLlmAnswerText,
   generateWebLlmAnswer,
+  getWebLlmBrowserModel,
   loadWebLlmLocalModel,
   resetWebLlmEngineForTests,
 } from "./webllm-engine";
@@ -21,6 +23,7 @@ export type {
   GenerateWebLlmAnswerOptions,
   LoadedWebLlmLocalModel,
   LoadWebLlmLocalModelOptions,
+  WebLlmBrowserModel,
   WebLlmChatMessage,
   WebLlmEngine,
   WebLlmProgress,

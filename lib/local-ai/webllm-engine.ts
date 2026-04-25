@@ -5,6 +5,70 @@ export const WEBLLM_DEFAULT_MODEL_LABEL = "WebLLM Qwen2.5 0.5B Instruct (q4f32)"
 export const WEBLLM_DEFAULT_MODEL_DETAIL =
   "WebLLM prebuilt q4f32 model: no fp16 shader requirement, downloads into browser cache, then answers inside the tab." as const;
 
+export type WebLlmBrowserModel = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  sizeLabel: string;
+  speedLabel: "Fast" | "Balanced" | "Strong" | "Heavy";
+  description: string;
+};
+
+export const WEBLLM_BROWSER_MODELS: WebLlmBrowserModel[] = [
+  {
+    id: WEBLLM_DEFAULT_MODEL_ID,
+    label: WEBLLM_DEFAULT_MODEL_LABEL,
+    shortLabel: "Qwen2.5 0.5B",
+    sizeLabel: "0.5B",
+    speedLabel: "Fast",
+    description: "가장 빠른 첫 다운로드용 기본 모델. q4f32라 브라우저 호환성이 좋습니다.",
+  },
+  {
+    id: "SmolLM2-360M-Instruct-q4f32_1-MLC",
+    label: "WebLLM SmolLM2 360M Instruct (q4f32)",
+    shortLabel: "SmolLM2 360M",
+    sizeLabel: "360M",
+    speedLabel: "Fast",
+    description: "가벼운 테스트와 저사양 브라우저용 초소형 모델입니다.",
+  },
+  {
+    id: "TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC",
+    label: "WebLLM TinyLlama 1.1B Chat (q4f32)",
+    shortLabel: "TinyLlama 1.1B",
+    sizeLabel: "1.1B",
+    speedLabel: "Balanced",
+    description: "작지만 대화형 응답 느낌을 보기 좋은 경량 모델입니다.",
+  },
+  {
+    id: "Llama-3.2-1B-Instruct-q4f32_1-MLC",
+    label: "WebLLM Llama 3.2 1B Instruct (q4f32)",
+    shortLabel: "Llama 3.2 1B",
+    sizeLabel: "1B",
+    speedLabel: "Balanced",
+    description: "브라우저에서 시도하기 좋은 범용 1B급 모델입니다.",
+  },
+  {
+    id: "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
+    label: "WebLLM Qwen2.5 1.5B Instruct (q4f32)",
+    shortLabel: "Qwen2.5 1.5B",
+    sizeLabel: "1.5B",
+    speedLabel: "Strong",
+    description: "조금 더 나은 답변 품질을 노리는 데스크톱용 선택지입니다.",
+  },
+  {
+    id: "Phi-3.5-mini-instruct-q4f32_1-MLC",
+    label: "WebLLM Phi 3.5 Mini Instruct (q4f32)",
+    shortLabel: "Phi 3.5 Mini",
+    sizeLabel: "Mini",
+    speedLabel: "Heavy",
+    description: "더 무거운 품질 후보입니다. WebGPU 메모리 여유가 있는 Chrome/Edge에서만 권장합니다.",
+  },
+];
+
+export function getWebLlmBrowserModel(modelId?: string): WebLlmBrowserModel {
+  return WEBLLM_BROWSER_MODELS.find((model) => model.id === modelId) ?? WEBLLM_BROWSER_MODELS[0];
+}
+
 export type WebLlmChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -59,8 +123,8 @@ export type WebLlmRuntime = {
 
 export type LoadedWebLlmLocalModel = {
   kind: "webllm";
-  modelId: typeof WEBLLM_DEFAULT_MODEL_ID;
-  label: typeof WEBLLM_DEFAULT_MODEL_LABEL;
+  modelId: string;
+  label: string;
   device: Extract<LocalModelDevice, "webgpu">;
   engine: WebLlmEngine;
 };
@@ -144,24 +208,24 @@ function toWebLlmLoadError(error: unknown): Error {
 export async function loadWebLlmLocalModel(
   options: LoadWebLlmLocalModelOptions = {},
 ): Promise<LoadedWebLlmLocalModel> {
-  const modelId = options.modelId ?? WEBLLM_DEFAULT_MODEL_ID;
-  if (modelId !== WEBLLM_DEFAULT_MODEL_ID) {
-    throw new Error(
-      `${modelId} is not the WebLLM fast default. Use ${WEBLLM_DEFAULT_MODEL_ID} for the first-click browser chat path; Gemma tiers stay advanced candidates until separately proven.`,
-    );
-  }
+  const selectedModel = getWebLlmBrowserModel(options.modelId);
 
-  if (cachedWebLlmEngine && !options.runtime) {
-    options.onProgress?.({ status: "ready", message: `${WEBLLM_DEFAULT_MODEL_LABEL} already loaded`, progress: 100 });
+  if (cachedWebLlmEngine && !options.runtime && cachedWebLlmEngine.modelId === selectedModel.id) {
+    options.onProgress?.({ status: "ready", message: `${cachedWebLlmEngine.label} already loaded`, progress: 100 });
     return cachedWebLlmEngine;
   }
 
+  if (cachedWebLlmEngine && !options.runtime && cachedWebLlmEngine.modelId !== selectedModel.id) {
+    await cachedWebLlmEngine.engine.unload?.();
+    cachedWebLlmEngine = undefined;
+  }
+
   const runtime = options.runtime ?? (await importWebLlmRuntime());
-  options.onProgress?.({ status: "loading", message: `Downloading/loading ${WEBLLM_DEFAULT_MODEL_LABEL}`, progress: 0 });
+  options.onProgress?.({ status: "loading", message: `Downloading/loading ${selectedModel.label}`, progress: 0 });
 
   let engine: WebLlmEngine;
   try {
-    engine = await runtime.CreateMLCEngine(WEBLLM_DEFAULT_MODEL_ID, {
+    engine = await runtime.CreateMLCEngine(selectedModel.id, {
       initProgressCallback(report) {
         options.onProgress?.(normalizeProgress(report));
       },
@@ -172,8 +236,8 @@ export async function loadWebLlmLocalModel(
 
   const loaded: LoadedWebLlmLocalModel = {
     kind: "webllm",
-    modelId: WEBLLM_DEFAULT_MODEL_ID,
-    label: WEBLLM_DEFAULT_MODEL_LABEL,
+    modelId: selectedModel.id,
+    label: selectedModel.label,
     device: "webgpu",
     engine,
   };
@@ -182,7 +246,7 @@ export async function loadWebLlmLocalModel(
     cachedWebLlmEngine = loaded;
   }
 
-  options.onProgress?.({ status: "ready", message: `${WEBLLM_DEFAULT_MODEL_LABEL} ready`, progress: 100 });
+  options.onProgress?.({ status: "ready", message: `${selectedModel.label} ready`, progress: 100 });
   return loaded;
 }
 
@@ -227,10 +291,10 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<WebLlmCompletio
 export async function generateWebLlmAnswer(
   prompt: string,
   options: GenerateWebLlmAnswerOptions = {},
-): Promise<{ text: string; answer: string; modelId: typeof WEBLLM_DEFAULT_MODEL_ID; device: "webgpu" }> {
+): Promise<{ text: string; answer: string; modelId: string; device: "webgpu" }> {
   const engine = options.engine ?? (await loadWebLlmLocalModel({ runtime: options.runtime, onProgress: options.onProgress }));
   const messages = options.messages ?? createWebLlmChatMessages(prompt, options.localContext, options.systemPrompt);
-  options.onProgress?.({ status: "generating", message: `Generating with ${WEBLLM_DEFAULT_MODEL_LABEL}...` });
+  options.onProgress?.({ status: "generating", message: `Generating with ${engine.label}...` });
 
   const response = await engine.engine.chat.completions.create({
     messages,
@@ -243,7 +307,7 @@ export async function generateWebLlmAnswer(
     ? await collectStreamingAnswer(response, options.onToken)
     : extractWebLlmAnswerText(response);
   const answer = text || "The WebLLM local model returned an empty response.";
-  return { text: answer, answer, modelId: WEBLLM_DEFAULT_MODEL_ID, device: "webgpu" };
+  return { text: answer, answer, modelId: engine.modelId, device: "webgpu" };
 }
 
 export async function loadBrowserLocalModel(options: LoadWebLlmLocalModelOptions = {}): Promise<LoadedWebLlmLocalModel> {
@@ -258,7 +322,7 @@ export async function generateBrowserLocalAnswer(request: {
   localContext?: string;
   onProgress?: (progress: WebLlmProgress) => void;
   maxNewTokens?: number;
-}): Promise<{ answer: string; text: string; modelId: typeof WEBLLM_DEFAULT_MODEL_ID; device: "webgpu" }> {
+}): Promise<{ answer: string; text: string; modelId: string; device: "webgpu" }> {
   const session = request.session && typeof request.session === "object" && (request.session as LoadedWebLlmLocalModel).kind === "webllm"
     ? request.session as LoadedWebLlmLocalModel
     : request.model && typeof request.model === "object" && (request.model as LoadedWebLlmLocalModel).kind === "webllm"

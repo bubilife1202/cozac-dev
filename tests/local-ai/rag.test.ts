@@ -50,7 +50,7 @@ test("marks supported document types and secret RAG stage approvals", () => {
 
 test("formats retrieved local context without server calls", () => {
   const matches = retrieveFromLocalDocuments("Gemma model", [
-    createLocalDocument("notes.txt", "Gemma 3 2B runs locally. Browser storage keeps notes local."),
+    createLocalDocument("notes.txt", "Gemma 4 E2B runs locally. Browser storage keeps notes local."),
   ]);
 
   assert.equal(matches.length, 1);

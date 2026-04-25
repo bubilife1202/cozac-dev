@@ -3,8 +3,8 @@ import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 
-const MODEL_ID = "onnx-community/gemma-3n-E2B-it-ONNX";
-const MODEL_CARD_URL = "https://huggingface.co/onnx-community/gemma-3n-E2B-it-ONNX";
+const MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
+const MODEL_CARD_URL = "https://huggingface.co/onnx-community/gemma-4-E2B-it-ONNX";
 const MODEL_CARD_DTYPE = Object.freeze({
   embed_tokens: "q8",
   audio_encoder: "q8",
@@ -204,5 +204,5 @@ console.log(`proof:answer ${JSON.stringify(answer)}`);
 console.log(`proof:done elapsed_ms=${Math.round(performance.now() - started)}`);
 
 if (!answer) {
-  throw new Error("Gemma 3n E2B proof produced empty output");
+  throw new Error("Gemma 4 E2B proof produced empty output");
 }

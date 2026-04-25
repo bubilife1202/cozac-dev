@@ -1,11 +1,11 @@
-# Local Agent Gemma 3n E2B Proof
+# Local Agent Gemma 4 E2B Proof
 
 Purpose: prove the Local Agent runtime plan can download, load, and generate with a 2B-class local model while keeping the browser Local Agent v1 boundary local-only.
 
 ## Model source
 
-- Model: `onnx-community/gemma-3n-E2B-it-ONNX`
-- Source: Hugging Face model card for Gemma 3n E2B IT ONNX.
+- Model: `onnx-community/gemma-4-E2B-it-ONNX`
+- Source: Hugging Face model card for Gemma 4 E2B IT ONNX.
 - Runtime API required by the model card: `@huggingface/transformers` `AutoProcessor` + `AutoModelForImageTextToText`.
 - Dtype copied from the model-card Transformers.js snippet:
 
@@ -47,14 +47,14 @@ Last verified in worker task `verify-and-document-that-the-l/task-1`:
 ```text
 E2B model proof: PASS
 Command:
-NODE_OPTIONS=--max-old-space-size=24576 npm run prove:local-ai-e2b-model -- --cache-dir /Users/cozac/Code/cozac-dev/.omx/tmp/local-ai-e2b-cache --max-new-tokens 8 --prompt "What is 2 + 2? Answer with only the number."
+NODE_OPTIONS=--max-old-space-size=24576 npm run prove:local-ai-e2b-model -- --cache-dir .omx/tmp/gemma4-e2b-proof-cache --max-new-tokens 1 --prompt "Say ok."
 Evidence:
-proof:start model=onnx-community/gemma-3n-E2B-it-ONNX requested_device=auto resolved_device=cpu max_new_tokens=8
+proof:start model=onnx-community/gemma-4-E2B-it-ONNX requested_device=auto resolved_device=cpu max_new_tokens=1
 proof:dtype {"embed_tokens":"q8","audio_encoder":"q8","vision_encoder":"fp16","decoder_model_merged":"q4"}
-proof:progress_total loaded=5971141717/5971141717
-proof:model_loaded elapsed_ms=2707 files_seen=18 downloads_done=19 ready_events=0
-proof:answer "4"
-proof:done elapsed_ms=3327
+proof:progress_total loaded=5725522184/5725522184
+proof:model_loaded elapsed_ms=3546 files_seen=18 downloads_done=17 ready_events=0
+proof:answer "Ok"
+proof:done elapsed_ms=4230
 
 SmolLM2 135M smoke proof: PASS
 Command:

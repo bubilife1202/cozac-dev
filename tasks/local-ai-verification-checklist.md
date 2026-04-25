@@ -38,7 +38,7 @@ Expected static-check posture:
 - Cloud LLM fallback imports (`openai`, `@ai-sdk/openai`, Braintrust) must not appear in Local Agent code.
 - Any raw `fetch(` in Local Agent code requires manual review proving it does not send local file content, folder names, transcripts, diagnostics, chunks, embeddings, tool logs, or retrieval context to an app/server route.
 - `prove:local-ai-model` must still download/load/generate with the SmolLM2 135M ONNX smoke model.
-- `prove:local-ai-e2b-model` must download/load/generate with `onnx-community/gemma-3n-E2B-it-ONNX` through `AutoProcessor` + `AutoModelForImageTextToText` and the model-card dtype documented in `tasks/local-ai-e2b-model-proof.md`.
+- `prove:local-ai-e2b-model` must download/load/generate with `onnx-community/gemma-4-E2B-it-ONNX` through `AutoProcessor` + `AutoModelForImageTextToText` and the model-card dtype documented in `tasks/local-ai-e2b-model-proof.md`.
 
 ## Required manual browser verification
 
@@ -53,7 +53,7 @@ Desktop viewport:
 
 1. Open `/local-ai`.
 2. Confirm the Local Agent route/workbench renders without console errors.
-3. Confirm diagnostics show browser support, File System Access support, WebGPU, CPU cores, memory/quota/private-mode state where available, and a Gemma 3 2B/4B-class recommendation.
+3. Confirm diagnostics show browser support, File System Access support, WebGPU, CPU cores, memory/quota/private-mode state where available, and a Gemma 4 E2B/E4B-class recommendation.
 4. Select the temporary folder by user gesture.
 5. Confirm only selected-folder entries are listed.
 6. Read `README.md` and confirm operation logging is local-only.

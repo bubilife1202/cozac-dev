@@ -53,7 +53,19 @@ const sourceFiles = [
   ...walk(join(root, "components", "apps", "local-ai")),
 ].filter((path) => /\.(ts|tsx|js|jsx|mjs)$/.test(path));
 
+const localAiProofAndDocFiles = [
+  "scripts/prove-local-ai-model.mjs",
+  "scripts/prove-local-ai-e2b-model.mjs",
+  "tasks/local-ai-e2b-model-proof.md",
+  "tasks/local-ai-verification-checklist.md",
+]
+  .map((file) => join(root, file))
+  .filter((path) => existsSync(path));
+
 const combined = sourceFiles
+  .map((path) => ({ path: relative(root, path), text: readFileSync(path, "utf8") }));
+
+const localAiProofAndDocs = localAiProofAndDocFiles
   .map((path) => ({ path: relative(root, path), text: readFileSync(path, "utf8") }));
 
 for (const { path, text } of combined) {
@@ -82,6 +94,12 @@ for (const { path, text } of combined) {
   }
 }
 
+for (const { path, text } of localAiProofAndDocs) {
+  if (/gemma-3|Gemma 3|270M|phone-270m/.test(text)) {
+    failures.push(`${path}: Local Agent proof/docs must reference current Gemma 4 or SmolLM2 135M paths, not stale Gemma 3/270M labels`);
+  }
+}
+
 const messagesFiles = walk(join(root, "components", "apps", "messages")).filter((path) => /\.(ts|tsx)$/.test(path));
 for (const file of messagesFiles) {
   const text = readFileSync(file, "utf8");
@@ -98,4 +116,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`Local Agent static verification passed (${requiredFiles.length} required files, ${combined.length} source files scanned).`);
+console.log(`Local Agent static verification passed (${requiredFiles.length} required files, ${combined.length} source files, ${localAiProofAndDocs.length} proof/doc files scanned).`);

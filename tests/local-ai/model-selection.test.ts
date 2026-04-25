@@ -15,21 +15,31 @@ test("explains that E4B is a capable-device candidate, not the immediate chat in
   const copy = getModelInstallCopy({ selectedTier: "e4b", installTier: "mobile-135m" });
 
   assert.match(copy.status, /candidate/i);
-  assert.match(copy.nextAction, /Install Mobile local 135M/i);
+  assert.match(copy.nextAction, /Install WebLLM fast model/i);
   assert.match(copy.detail, /E4B/);
-  assert.match(copy.detail, /Mobile local/);
+  assert.match(copy.detail, /WebLLM/);
 });
 
-test("keeps selected Mobile local install copy even on E2B-capable devices", () => {
+test("keeps selected WebLLM install copy even on E2B-capable devices", () => {
   const copy = getModelInstallCopy({ selectedTier: "mobile-135m", installTier: "e2b" });
 
-  assert.match(copy.nextAction, /Install Mobile local 135M/i);
-  assert.match(copy.detail, /로컬/);
+  assert.match(copy.nextAction, /Install WebLLM fast model/i);
+  assert.match(copy.detail, /WebLLM/);
 });
 
-test("keeps selected E2B install copy even on mobile fallback devices", () => {
+test("does not offer E2B as the first-click install when the user selects a heavy candidate", () => {
   const copy = getModelInstallCopy({ selectedTier: "e2b", installTier: "mobile-135m" });
 
-  assert.match(copy.nextAction, /Install Gemma 4 E2B/i);
-  assert.match(copy.status, /Recommended browser install/i);
+  assert.match(copy.nextAction, /Install WebLLM fast model/i);
+  assert.match(copy.status, /quality candidate/i);
+  assert.match(copy.detail, /별도 고급 설치/);
+});
+
+test("keeps the first-run copy simple like a local LLM download-and-chat page", () => {
+  const copy = getModelInstallCopy({ selectedTier: "mobile-135m", installTier: "mobile-135m" });
+
+  assert.equal(copy.nextAction, "Install WebLLM fast model");
+  assert.match(copy.headline, /WebLLM Qwen2\.5 0\.5B/);
+  assert.match(copy.detail, /브라우저 캐시/);
+  assert.doesNotMatch(`${copy.status} ${copy.headline} ${copy.detail} ${copy.nextAction}`, /Mobile local 135M|phone-safe/i);
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Atom, CheckCircle2, ChevronRight, Download, LockKeyhole, Send, Settings, Smartphone, Zap } from "lucide-react";
+import { Atom, CheckCircle2, Download, Send, Smartphone, Zap } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,8 @@ import { useWindowFocus } from "@/lib/window-focus-context";
 import { WindowControls } from "@/components/window-controls";
 import {
   BrowserFolderAdapter,
-  RUNNABLE_LOCAL_MODEL_ID as MOBILE_LOCAL_MODEL_ID,
+  WEBLLM_DEFAULT_MODEL_ID as MOBILE_LOCAL_MODEL_ID,
+  WEBLLM_DEFAULT_MODEL_LABEL,
   clearLocalAiBrowserStorage,
   createLineDiffSummary,
   getBrowserInstallTier,
@@ -143,7 +144,7 @@ function createCapabilityCards(): {
         status: capabilityStatus(signals.webGPU, true),
         detail: signals.webGPU
           ? "WebGPU is available for browser-local model runtimes."
-          : "WebGPU is unavailable; the phone-safe SmolLM2 runtime can still load through WASM with degraded speed and no cloud fallback.",
+          : "WebGPU is unavailable; WebLLM requires WebGPU for the fast browser chat path, so show a clear unsupported state instead of falling into cloud fallback.",
       },
       {
         id: "indexeddb",
@@ -211,8 +212,8 @@ function buildDeviceSuitability(
   if (recommendation.tier === "e4b") {
     return {
       verdict: "good",
-      headline: "이 PC는 E4B 후보지만, 즉시 대화는 Mobile 135M부터입니다",
-      body: "E4B/E2B는 품질 모델 후보입니다. 하지만 브라우저에서 '안녕' 같은 첫 응답을 바로 확인할 기본 런타임은 Mobile local 135M입니다. 무거운 Gemma 설치는 별도 선택으로 둡니다.",
+      headline: "이 PC는 E4B 후보지만, 즉시 대화는 WebLLM Qwen부터입니다",
+      body: "E4B/E2B는 품질 모델 후보입니다. 하지만 브라우저에서 '안녕' 같은 첫 응답을 바로 확인할 기본 런타임은 WebLLM Qwen2.5 0.5B q4f32입니다. 무거운 Gemma 설치는 별도 고급 경로로 둡니다.",
       chips,
     };
   }
@@ -274,7 +275,7 @@ function describeGemma4Tier(
       headline: "품질 모델 후보 — 별도 설치/검증 필요",
       detail:
         recommendedTier === "mobile-135m"
-          ? "이 PC에서 돌려볼 수는 있지만 첫 대화 자동 설치 대상은 아닙니다. 즉시 응답은 Mobile local 135M으로 시작하세요."
+          ? "이 PC에서 돌려볼 수는 있지만 첫 대화 자동 설치 대상은 아닙니다. 즉시 응답은 WebLLM Qwen2.5 0.5B q4f32로 시작하세요."
           : "이 PC는 E4B도 후보지만, 브라우저에서 먼저 설치하고 답변을 확인할 안정 경로는 E2B입니다.",
       status: recommendedTier === "e2b" ? "recommended" : "fits",
     };
@@ -323,7 +324,6 @@ type ChatMessage = {
   timestamp?: string;
 };
 
-const RUNNABLE_LOCAL_MODEL_LABEL = "phone-safe local runtime";
 const GEMMA4_E2B_MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
 const GEMMA4_E4B_MODEL_ID = "onnx-community/gemma-4-E4B-it-ONNX";
 
@@ -339,10 +339,10 @@ const MODEL_TIERS: Array<{
 }> = [
   {
     id: "mobile-135m",
-    label: "Mobile local",
-    model: "135M",
-    description: "Phone-safe browser-local runtime",
-    badge: "Mobile",
+    label: "WebLLM local",
+    model: "Qwen 0.5B",
+    description: "WebLLM q4f32 browser chat runtime",
+    badge: "Default",
     icon: Smartphone,
   },
   {
@@ -387,7 +387,7 @@ function getSelectedBrowserModelId(tier: ModelTier): string | null {
 }
 
 function getSelectedModelLabel(tier: ModelTier): string {
-  if (tier === "mobile-135m") return "Mobile local 135M";
+  if (tier === "mobile-135m") return "WebLLM Qwen 0.5B";
   if (tier === "e2b") return "Gemma 4 E2B";
   if (tier === "e4b") return "Gemma 4 E4B";
   if (tier === "26b-a4b") return "Gemma 4 26B A4B";
@@ -517,7 +517,7 @@ function pickFunction(module: LocalModelEngineModule, names: string[]): unknown 
 }
 
 async function resolveLocalModelEngine(): Promise<ResolvedLocalModelEngine> {
-  const engineModule = (await import("@/lib/local-ai/model-engine")) as unknown as LocalModelEngineModule;
+  const engineModule = (await import("@/lib/local-ai/webllm-engine")) as unknown as LocalModelEngineModule;
   const load = pickFunction(engineModule, [
     "loadBrowserLocalModel",
     "loadLocalModel",
@@ -596,13 +596,13 @@ export function LocalAgentApp({
   );
   const [modelRun, setModelRun] = useState<LocalModelUiState>({
     status: "idle",
-    message: `${RUNNABLE_LOCAL_MODEL_LABEL} is the current browser download path for Local Agent.`,
+    message: `${WEBLLM_DEFAULT_MODEL_LABEL} is the current browser download path for Local Agent.`,
   });
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "initial-greeting",
       role: "assistant",
-      text: "바로 대화하려면 Mobile local 135M부터 설치하세요. 이 모델은 품질은 낮지만 브라우저에서 빠르게 설치되고 즉시 응답 확인이 됩니다.\n이 PC는 Gemma 4 E2B/E4B도 후보지만, 무거운 모델은 별도 설치/검증 대상으로 둡니다. 설치를 지우려면 Clear local model storage를 누르면 브라우저 캐시와 Local Agent IndexedDB를 삭제합니다.",
+      text: "WebLLM처럼 바로 쓰는 흐름으로 바꿨습니다. Install WebLLM fast model을 누르면 Qwen2.5 0.5B q4f32 모델을 브라우저 캐시에 받고, Ready 이후 '안녕' 같은 일반 대화에 바로 답합니다.\nGemma 4 E2B/E4B는 이 PC에서 시도 가능한 품질 후보지만 첫 자동 설치 대상이 아닙니다. 설치를 지우려면 Clear downloaded model을 누르세요.",
       timestamp: "11:52 AM",
     },
   ]);
@@ -898,7 +898,7 @@ export function LocalAgentApp({
           : selectedModelTier;
       if (browserChatTier !== selectedModelTier) {
         setSelectedModelTier(browserChatTier);
-        appendChatMessage("assistant", "Gemma 4는 품질 모델 후보라서 자동으로 무거운 설치를 시작하지 않습니다. 먼저 Mobile local 135M으로 즉시 응답을 확인합니다.");
+        appendChatMessage("assistant", "Gemma 4는 품질 모델 후보라서 자동으로 무거운 설치를 시작하지 않습니다. 먼저 WebLLM Qwen2.5 0.5B q4f32로 즉시 응답을 확인합니다.");
       }
       const selectedModelId = getSelectedBrowserModelId(browserChatTier);
       const selectedModelLabel = getSelectedModelLabel(browserChatTier);
@@ -913,7 +913,7 @@ export function LocalAgentApp({
       if (needsReload) {
         modelSessionRef.current = null;
       }
-      const session = modelSessionRef.current ?? (await handleLoadModel());
+      const session = modelSessionRef.current ?? (await handleLoadModel(browserChatTier));
 
       setModelRun((current) => ({
         ...current,
@@ -1030,7 +1030,7 @@ export function LocalAgentApp({
     loadedModelIdRef.current = null;
     setModelRun({
       status: "idle",
-      message: "Local model storage was reset. Install Mobile local 135M again to chat.",
+      message: "Local model storage was reset. Install WebLLM fast model again to chat.",
       progress: undefined,
       answer: undefined,
       error: undefined,
@@ -1041,7 +1041,7 @@ export function LocalAgentApp({
       ? `Reset attempted, but some storage could not be cleared: ${result.errors.join("; ")}`
       : `Deleted Local Agent IndexedDB${result.deletedDatabase ? "" : " (not present or blocked)"} and ${result.deletedCaches.length} model/cache bucket(s).`;
     addEvent({ title: "Local model storage cleared", detail, status: result.errors.length ? "blocked" : "complete" });
-    appendChatMessage("assistant", result.errors.length ? detail : "로컬 모델/세션 저장소를 지웠습니다. 다시 쓰려면 Install Mobile local 135M을 누르세요.");
+    appendChatMessage("assistant", result.errors.length ? detail : "로컬 모델/세션 저장소를 지웠습니다. 다시 쓰려면 Install WebLLM fast model을 누르세요.");
   }, [addEvent, appendChatMessage]);
 
   const handleReviewSecret = useCallback(
@@ -1076,7 +1076,7 @@ export function LocalAgentApp({
 
   const selectedBrowserModelId = getSelectedBrowserModelId(selectedModelTier);
   const recommendedInstallTier = getRecommendedGemma4Tier(workbench.modelRecommendation);
-  const currentInstallTier: ModelTier = selectedModelTier === "mobile-135m" || selectedModelTier === "e2b" ? selectedModelTier : recommendedInstallTier;
+  const currentInstallTier: ModelTier = recommendedInstallTier;
   const installCopy = getModelInstallCopy({ selectedTier: selectedModelTier, installTier: currentInstallTier });
   const modelBusy = modelRun.status === "loading" || modelRun.status === "generating";
   const modelReady = modelRun.status === "ready" && loadedModelIdRef.current === selectedBrowserModelId;
@@ -1093,14 +1093,14 @@ export function LocalAgentApp({
       data-app="local-ai"
       data-mobile={isMobile ? "true" : "false"}
       data-shell={inShell ? "true" : "false"}
-      className="h-full w-full overflow-hidden bg-[#fcfbf8] text-[#1d1c1a]"
+      className="h-full w-full overflow-hidden bg-[#f7f5f0] text-[#171615]"
     >
       <div className="flex h-full min-h-0 flex-col">
         <header
-          className="flex shrink-0 items-center justify-between border-b border-[#e6e2dc] bg-[#fffefa]/95 px-7 py-5 backdrop-blur-xl"
+          className="flex shrink-0 items-center justify-between border-b border-[#e3ded6] bg-white px-4 py-3 sm:px-6"
           onMouseDown={inDesktopShell ? windowFocus?.onDragStart : undefined}
         >
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 items-center gap-3">
             <WindowControls
               inShell={inDesktopShell}
               showWhenNotInShell={false}
@@ -1111,63 +1111,81 @@ export function LocalAgentApp({
               closeLabel="Close Local Agent"
               className="p-1"
             />
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#0d0d0d] text-sm font-bold tracking-[-0.05em] text-white shadow-sm">
-              CZ
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#111] text-xs font-bold text-white">CZ</div>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold tracking-[-0.03em] text-[#171615]">Local LLM</h1>
+              <p className="truncate text-xs text-[#777068]">Download a browser model. Chat in this tab.</p>
             </div>
-            <div className="text-[26px] font-semibold tracking-[-0.04em] text-[#151515]">cozac.dev</div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <h1 className="mr-2 text-[26px] font-semibold tracking-[-0.04em] text-[#151515]">Local Agent</h1>
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#eaf7eb] px-4 py-2 text-sm font-medium text-[#28743a]">
-              <LockKeyhole className="h-4 w-4" />
-              Local only
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden rounded-full bg-[#eaf7eb] px-3 py-1.5 text-xs font-semibold text-[#267238] sm:inline-flex">Local only</span>
+            <span className={cn(
+              "rounded-full border px-3 py-1.5 text-xs font-semibold",
+              modelReady ? "border-emerald-200 bg-emerald-50 text-emerald-700" : modelBusy ? "border-amber-200 bg-amber-50 text-amber-700" : "border-[#e2ddd5] bg-[#f7f5f0] text-[#67615a]",
+            )}>
+              {modelReady ? "Ready" : modelBusy ? "Loading" : "Not installed"}
             </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#e4e0da] bg-[#f5f2ee] px-4 py-2 text-sm font-medium text-[#6a6660]">
-              <CheckCircle2 className="h-4 w-4" />
-              {modelReady ? `${getSelectedModelLabel(selectedModelTier)} ready` : modelBusy ? "Model loading" : `${getSelectedModelLabel(recommendedInstallTier)} not installed`}
-            </span>
-            {inDesktopShell && (
-              <button
-                type="button"
-                onClick={windowFocus?.closeWindow}
-                className="rounded-full border border-[#e4e0da] bg-white px-3 py-1.5 text-xs font-medium text-[#6a6660] transition hover:bg-[#f6f3ef]"
-              >
-                Close
-              </button>
-            )}
           </div>
         </header>
 
-        <main className={cn("grid min-h-0 flex-1 bg-[#fcfbf8]", isMobile ? "grid-cols-1 overflow-auto" : "grid-cols-[420px_minmax(0,1fr)]") }>
-          <aside className="flex min-h-0 min-w-0 flex-col overflow-y-auto overflow-x-hidden border-r border-[#e6e2dc] bg-[#fbfaf7] px-5 py-5">
-            <section className="min-w-0">
-              <div className="mb-3 text-lg font-medium tracking-[-0.02em] text-[#1d1c1a]">Model</div>
-              <div className="mb-4 rounded-[18px] border border-[#d8c7aa] bg-[#fff8ea] p-4 shadow-[0_10px_28px_rgba(74,55,24,0.08)]">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a683c]">{installCopy.status}</div>
-                <div className="mt-1 text-[15px] font-semibold leading-snug text-[#1d1c1a]">{installCopy.headline}</div>
-                <p className="mt-2 text-sm leading-relaxed text-[#5f5b55]">{installCopy.detail}</p>
-                <button
-                  type="button"
-                  onClick={() => void handleInstallRecommendedModel().catch(() => undefined)}
-                  disabled={modelBusy}
-                  className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-[#24221f] px-4 py-2.5 text-[15px] font-semibold text-white transition hover:scale-[1.01] hover:bg-[#171613] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Download className="h-4 w-4" />
-                  {modelReady ? `${getSelectedModelLabel(selectedModelTier)} installed` : modelBusy ? "Installing..." : installCopy.nextAction}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleClearLocalModelStorage().catch(() => undefined)}
-                  disabled={modelBusy}
-                  className="mt-2 flex min-h-[40px] w-full items-center justify-center rounded-[12px] border border-[#d8d1c8] bg-white px-3 py-2 text-sm font-semibold text-[#5f5b55] transition hover:bg-[#fbf7ef] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Clear local model storage
-                </button>
+        <main className={cn("grid min-h-0 flex-1", isMobile ? "grid-cols-1 overflow-auto" : "grid-cols-[320px_minmax(0,1fr)] overflow-hidden")}>
+          <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto overflow-x-hidden border-r border-[#e3ded6] bg-[#fbfaf7] p-4">
+            <section className="rounded-3xl border border-[#ddd5ca] bg-white p-4 shadow-[0_14px_40px_rgba(35,31,25,0.06)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9a7240]">Model</div>
+                  <div className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[#171615]">WebLLM Qwen 0.5B</div>
+                  <p className="mt-1 text-sm leading-relaxed text-[#67615a]">브라우저 캐시에 받고 바로 대화하는 기본 모델입니다.</p>
+                </div>
+                <span className="rounded-full bg-[#f2eadf] px-2.5 py-1 text-[11px] font-semibold text-[#8a6332]">Default</span>
               </div>
-              <div className="grid min-w-0 gap-3">
-                {MODEL_TIERS.map((tier) => {
-                  const selected = selectedModelTier === tier.id;
-                  const Icon = tier.icon;
+
+              <div className="mt-4 rounded-2xl bg-[#f8f4ed] p-3 text-sm leading-relaxed text-[#514c46]">
+                <div className="font-semibold text-[#201d19]">{installCopy.headline}</div>
+                <p className="mt-1">{installCopy.detail}</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleInstallRecommendedModel().catch(() => undefined)}
+                disabled={modelBusy}
+                className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-[#171615] px-4 py-3 text-[15px] font-semibold text-white transition hover:bg-[#2a2824] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Download className="h-4 w-4" />
+                {modelReady ? "WebLLM model ready" : modelBusy ? "Downloading / loading..." : "Install WebLLM fast model"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleClearLocalModelStorage().catch(() => undefined)}
+                disabled={modelBusy}
+                className="mt-2 flex min-h-[42px] w-full items-center justify-center rounded-2xl border border-[#ddd5ca] bg-white px-4 py-2 text-sm font-semibold text-[#5e5851] transition hover:bg-[#faf7f2] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Clear downloaded model
+              </button>
+
+              {(modelRun.status === "loading" || modelRun.status === "generating" || modelRun.status === "error" || modelReady) && (
+                <div className="mt-4 rounded-2xl border border-[#e5ded2] bg-[#fffdf8] p-3 text-xs leading-relaxed text-[#67615a]">
+                  <div className="flex items-center justify-between gap-3 font-bold uppercase tracking-[0.14em] text-[#81786e]">
+                    <span>{modelReady ? "ready" : modelRun.status}</span>
+                    {typeof modelRun.progress === "number" && <span>{modelRun.progress}%</span>}
+                  </div>
+                  {typeof modelRun.progress === "number" && (
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/10">
+                      <div className="h-full rounded-full bg-[#b88432]" style={{ width: `${Math.min(Math.max(modelRun.progress, 0), 100)}%` }} />
+                    </div>
+                  )}
+                  <p className="mt-2">{modelRun.error ?? modelRun.message}</p>
+                </div>
+              )}
+            </section>
+
+            <details className="rounded-3xl border border-[#e3ded6] bg-white p-4">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-[#211f1b] marker:hidden">
+                Advanced candidates
+                <span className="ml-2 text-xs font-normal text-[#81786e]">Gemma options</span>
+              </summary>
+              <div className="mt-3 grid gap-2">
+                {MODEL_TIERS.filter((tier) => tier.id !== "mobile-135m").map((tier) => {
                   const descriptor = describeGemma4Tier(tier.id, workbench.modelRecommendation, detectedSignals);
                   return (
                     <button
@@ -1175,213 +1193,105 @@ export function LocalAgentApp({
                       type="button"
                       onClick={() => setSelectedModelTier(tier.id)}
                       className={cn(
-                        "group flex min-h-[88px] w-full min-w-0 items-center gap-3 rounded-[16px] border bg-white px-3 py-3 text-left transition hover:border-[#c5aa7a] hover:bg-[#fffdf7]",
-                        selected ? "border-[#b9975d] shadow-[0_0_0_1px_rgba(185,151,93,0.18)]" : "border-[#e7e2dc]"
+                        "w-full rounded-2xl border px-3 py-2.5 text-left transition hover:bg-[#fffdf8]",
+                        selectedModelTier === tier.id ? "border-[#b9975d] bg-[#fff8ea]" : "border-[#e6e0d8] bg-white",
                       )}
-                      aria-pressed={selected}
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[13px] border border-[#ede8e2] bg-[#fffdfa] text-[#b57918]">
-                        <Icon className="h-6 w-6" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex flex-wrap items-center gap-2 text-[15px] font-semibold tracking-[-0.03em] text-[#1c1b19]">
-                          {tier.label} — {tier.model}
-                          {(tier.badge || descriptor.status === "recommended") && (
-                            <span className="rounded-[7px] bg-[#f3ebdf] px-1.5 py-1 text-[11px] font-medium text-[#8a683c]">
-                              {descriptor.status === "recommended" ? "Recommended" : tier.badge}
-                            </span>
-                          )}
-                        </span>
-                        <span className="mt-1 block text-sm text-[#5f5b55]">{descriptor.headline}</span>
-                        <span className="mt-1 block text-xs leading-relaxed text-[#8a837b]">{descriptor.detail}</span>
-                      </span>
-                      {selected && (
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1f1e1b] text-white">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        </span>
-                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-[#211f1b]">{tier.label} {tier.model}</span>
+                        <span className="rounded-full bg-[#f3eee7] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#81786e]">{tier.badge}</span>
+                      </div>
+                      <p className="mt-1 text-xs leading-relaxed text-[#777068]">{descriptor.headline}</p>
                     </button>
                   );
                 })}
               </div>
-              <div
-                className={cn(
-                  "mt-4 rounded-[16px] border px-4 py-3",
-                  deviceSuitability.verdict === "good"
-                    ? "border-emerald-200 bg-emerald-50/80"
-                    : deviceSuitability.verdict === "mixed"
-                      ? "border-amber-200 bg-amber-50/80"
-                      : "border-rose-200 bg-rose-50/80",
-                )}
-              >
-                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7d776f]">This device</div>
-                <div className="mt-1 text-[15px] font-semibold text-[#1d1c1a]">{deviceSuitability.headline}</div>
-                <p className="mt-1 text-sm leading-relaxed text-[#5f5b55]">{deviceSuitability.body}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {deviceSuitability.chips.map((chip) => (
-                    <span
-                      key={chip}
-                      className="rounded-full border border-[#e5ddd2] bg-white/80 px-2.5 py-1 text-[11px] font-medium text-[#615b54]"
-                    >
-                      {chip}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              {(modelRun.status === "loading" || modelRun.status === "generating" || modelRun.status === "error") && (
-                <div className="mt-3 rounded-[14px] bg-[#f5f1ea] p-3 text-xs leading-relaxed text-[#69635c]">
-                  <div className="flex items-center justify-between gap-3 font-medium uppercase tracking-[0.12em]">
-                    <span>{modelRun.status}</span>
-                    {typeof modelRun.progress === "number" && <span>{modelRun.progress}%</span>}
-                  </div>
-                {typeof modelRun.progress === "number" && (
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10">
-                    <div className="h-full rounded-full bg-[#b88432]" style={{ width: `${Math.min(Math.max(modelRun.progress, 0), 100)}%` }} />
-                  </div>
-                )}
-                  <p className="mt-2">{modelRun.error ?? modelRun.message}</p>
-                </div>
-              )}
-            </section>
+              <p className="mt-3 text-xs leading-relaxed text-[#81786e]">Gemma 계열은 고급 후보입니다. 첫 응답은 WebLLM 모델로 검증합니다.</p>
+            </details>
 
-            <section className="mt-7 border-t border-[#e3ded7] pt-5">
-              <div className="mb-3 text-lg font-medium tracking-[-0.02em] text-[#1d1c1a]">Workspace</div>
-              <div className="mb-3 rounded-[16px] border border-[#e7e2dc] bg-white px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7d776f]">Local folders</div>
-                <p className="mt-1 text-sm leading-relaxed text-[#5f5b55]">
-                  대화/모델 다운로드는 폴더 없이도 이 브라우저 안에서 로컬로 동작합니다. 파일 읽기/쓰기만 여기서 직접 지정한 로컬 폴더를 사용합니다.
-                </p>
+            <details className="rounded-3xl border border-[#e3ded6] bg-white p-4">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-[#211f1b] marker:hidden">
+                Optional file tools
+                <span className="ml-2 text-xs font-normal text-[#81786e]">not needed for chat</span>
+              </summary>
+              <p className="mt-2 text-sm leading-relaxed text-[#67615a]">일반 채팅은 폴더 없이 됩니다. 파일 읽기/쓰기만 폴더를 직접 고릅니다.</p>
+              <div className="mt-3 grid gap-2">
+                {workbench.folders.map((folder) => (
+                  <button
+                    key={`${folder.id}-selector`}
+                    type="button"
+                    onClick={() => void handleSelectFolder(folder.role)}
+                    className="rounded-2xl border border-[#e6e0d8] bg-[#fbfaf7] px-3 py-2 text-left text-xs font-semibold text-[#5e5851] transition hover:bg-white"
+                  >
+                    {folder.permission === "granted" ? `Change ${ROLE_COPY[folder.role].label}` : `Select ${ROLE_COPY[folder.role].label}`}
+                  </button>
+                ))}
+              </div>
+              {adapterNotice && <p className="mt-3 text-xs leading-relaxed text-[#8a4d36]">{adapterNotice}</p>}
+              {pendingApprovalEvents.length > 0 && (
                 <div className="mt-3 grid gap-2">
-                  {workbench.folders.map((folder) => (
-                    <button
-                      key={`${folder.id}-selector`}
-                      type="button"
-                      onClick={() => void handleSelectFolder(folder.role)}
-                      className="flex items-center justify-between rounded-[12px] border border-[#e7e2dc] bg-[#fcfbf8] px-3 py-2.5 text-left text-sm font-medium text-[#2a2722] transition hover:bg-white"
-                    >
-                      <span className="min-w-0">
-                        <span className="block">{folder.permission === "granted" ? `Change ${ROLE_COPY[folder.role].label} folder` : `Select ${ROLE_COPY[folder.role].label} folder`}</span>
-                        <span className="mt-0.5 block truncate text-xs font-normal text-[#706a62]">{folder.name}</span>
-                      </span>
-                      <span className="shrink-0 text-xs uppercase tracking-[0.12em] text-[#8c877f]">
-                        {folder.permission === "granted" ? "selected" : "required"}
-                      </span>
+                  {pendingApprovalEvents.map((event) => (
+                    <button key={event.id} type="button" onClick={() => void handleReviewSecret(event.id)} className="rounded-2xl border border-[#e7cfc5] bg-[#fff7f3] px-3 py-2 text-left text-xs font-semibold text-[#8a4d36]">
+                      Approve once · {event.filePath ?? event.title}
                     </button>
                   ))}
                 </div>
-                <p className="mt-3 text-xs leading-relaxed text-[#706a62]">
-                  {allFoldersSelected
-                    ? "All local folders are assigned."
-                    : hasGrantedFolder
-                      ? "At least one local folder is assigned. Add the rest for a complete local workspace."
-                      : "No local folder is assigned yet."}
-                </p>
-              </div>
-            </section>
-
-            {(pendingApprovalEvents.length > 0 || adapterNotice) && (
-              <section className="mt-5 border-t border-[#e3ded7] pt-4">
-                {pendingApprovalEvents.length > 0 && (
-                  <div className="grid gap-2">
-                    {pendingApprovalEvents.map((event) => (
-                      <div key={event.id} className="rounded-2xl bg-[#f5f1ea] p-3 text-xs leading-relaxed text-[#5f5b55]">
-                        <div className="font-semibold">Approval needed</div>
-                        <p className="mt-1 opacity-70">{event.filePath ?? event.title}</p>
-                        <button type="button" onClick={() => void handleReviewSecret(event.id)} className="mt-2 rounded-full border border-[#d8d1c8] px-3 py-1 font-semibold">Approve once</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {adapterNotice && (
-                  <p className="mt-3 text-xs leading-relaxed text-[#6e6861] first:mt-0">{adapterNotice}</p>
-                )}
-              </section>
-            )}
-
-            <div className="mt-auto flex items-center justify-between border-t border-[#e3ded7] pt-5 text-[#5f5b55]">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111] text-sm font-semibold text-white">N</span>
-                <span className="text-sm">cozac.dev</span>
-                <ChevronRight className="h-4 w-4 rotate-90" />
-              </div>
-              <Settings className="h-5 w-5" />
-            </div>
+              )}
+            </details>
           </aside>
 
           <section className="flex min-h-0 flex-col overflow-hidden bg-[#fffefa]">
             {!modelReady && (
-              <div className="border-b border-[#ece5dc] bg-[#fff8ea] px-6 py-4 sm:px-9">
-                <div className="flex flex-col gap-3 rounded-[18px] border border-[#e2cfae] bg-white/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="border-b border-[#eee7df] bg-[#fff8ea] px-4 py-3 sm:px-6">
+                <div className="flex flex-col gap-3 rounded-3xl border border-[#e2cfae] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a683c]">Model setup</div>
-                    <div className="mt-1 text-base font-semibold text-[#1d1c1a]">{installCopy.headline}</div>
-                    <p className="mt-1 text-sm leading-relaxed text-[#5f5b55]">모델 설치는 이 버튼 한 번입니다. 설치 완료는 상단 상태가 ready로 바뀌고 버튼이 installed로 바뀌면 확인됩니다. 지우기는 Clear local model storage입니다.</p>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9a7240]">One click setup</div>
+                    <div className="mt-1 text-base font-semibold text-[#171615]">Install WebLLM fast model, then chat.</div>
+                    <p className="mt-1 text-sm leading-relaxed text-[#67615a]">다운로드가 끝나면 상태가 Ready로 바뀝니다. 삭제는 Clear downloaded model입니다.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => void handleInstallRecommendedModel().catch(() => undefined)}
                     disabled={modelBusy}
-                    className="flex min-h-[46px] shrink-0 items-center justify-center gap-2 rounded-[14px] bg-[#24221f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#171613] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex min-h-[46px] shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#171615] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#2a2824] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Download className="h-4 w-4" />
-                    {modelBusy ? "Installing..." : installCopy.nextAction}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleClearLocalModelStorage().catch(() => undefined)}
-                    disabled={modelBusy}
-                    className="flex min-h-[46px] shrink-0 items-center justify-center rounded-[14px] border border-[#d8d1c8] bg-white px-4 py-2 text-sm font-semibold text-[#5f5b55] transition hover:bg-[#fbf7ef] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Clear local model storage
+                    {modelBusy ? "Downloading..." : "Install WebLLM fast model"}
                   </button>
                 </div>
               </div>
             )}
+
             <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
-              <div className="space-y-3 px-9 py-6">
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-5 sm:px-6">
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className={cn(
-                      "flex items-start gap-4",
-                      message.role === "user"
-                        ? "justify-end"
-                        : "justify-start"
-                    )}
+                    className={cn("flex items-end gap-3", message.role === "user" ? "justify-end" : "justify-start")}
                   >
                     {message.role === "assistant" && (
-                      <span className="mt-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[#111] text-sm font-bold text-white">CZ</span>
+                      <span className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#171615] text-xs font-bold text-white">AI</span>
                     )}
                     <div
                       className={cn(
-                        "max-w-[760px] rounded-[24px] px-6 py-3 text-[15px] leading-[1.42] shadow-none",
+                        "max-w-[min(720px,85%)] rounded-3xl px-4 py-3 text-[15px] leading-relaxed",
                         message.role === "user"
-                          ? "order-1 rounded-br-[10px] bg-[#262420] text-white"
-                          : "rounded-tl-[10px] bg-[#f5f1ec] text-[#38342f]"
+                          ? "rounded-br-lg bg-[#171615] text-white"
+                          : "rounded-bl-lg bg-[#f1eee8] text-[#2d2924]",
                       )}
                     >
                       <p className="whitespace-pre-wrap">{message.text}</p>
                       {message.timestamp && (
-                        <div
-                          className={cn(
-                            "mt-3 text-sm",
-                            message.role === "user" ? "text-right text-white/60" : "text-[#8a837b]"
-                          )}
-                        >
-                          {message.timestamp}
-                        </div>
+                        <div className={cn("mt-2 text-[11px]", message.role === "user" ? "text-white/55" : "text-[#8a837b]")}>{message.timestamp}</div>
                       )}
                     </div>
-                    {message.role === "user" && (
-                      <span className="order-2 mt-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#262420] text-sm font-semibold text-white">N</span>
-                    )}
                   </div>
                 ))}
               </div>
             </ScrollArea>
 
-            <div className={cn("bg-[#fffefa] px-4 pb-4 pt-2 sm:px-8", inShell ? "pb-24" : "")}>
-              <div className="flex flex-col gap-3 rounded-[24px] border border-[#dfdbd4] bg-white px-4 py-3 shadow-[0_8px_28px_rgba(42,37,29,0.08)] sm:flex-row sm:items-end sm:px-5">
+            <div className={cn("border-t border-[#eee7df] bg-white px-4 py-4 sm:px-6", inShell ? "pb-24" : "")}>
+              <div className="mx-auto flex w-full max-w-4xl items-end gap-3 rounded-3xl border border-[#ded7ce] bg-[#fbfaf7] p-3 shadow-[0_10px_30px_rgba(35,31,25,0.07)]">
                 <Textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
@@ -1402,22 +1312,20 @@ export function LocalAgentApp({
                     void handleSubmitPrompt();
                   }}
                   rows={1}
-                  className="max-h-[160px] min-h-[52px] w-full flex-1 resize-none border-0 bg-transparent p-0 text-[16px] leading-relaxed text-[#2a2926] shadow-none placeholder:text-[#9b9690] focus-visible:ring-0 sm:text-[17px]"
-                  placeholder="메시지를 입력하세요 · Enter 전송 / Shift+Enter 줄바꿈"
+                  className="max-h-[160px] min-h-[48px] flex-1 resize-none border-0 bg-transparent p-0 text-[16px] leading-6 text-[#201d19] shadow-none outline-none placeholder:text-[#9b9690] focus-visible:ring-0 focus-visible:ring-offset-0"
+                  placeholder={modelReady ? "Ask anything local..." : "Install model first, then type 안녕"}
                 />
                 <button
                   type="button"
                   onClick={() => void handleSubmitPrompt()}
-                  className="flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-full bg-[#262420] px-5 text-sm font-semibold text-white transition hover:scale-[1.02] hover:bg-[#171613] sm:w-12 sm:px-0"
+                  disabled={modelBusy}
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#171615] text-white transition hover:bg-[#2a2824] disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Send local prompt"
                 >
-                  <Send className="h-5 w-5 sm:h-6 sm:w-6" />
-                  <span className="sm:sr-only">Send</span>
+                  <Send className="h-5 w-5" />
                 </button>
               </div>
-              <p className="mt-3 text-xs leading-relaxed text-[#7a746d]">
-                폴더 지정 없이도 대화는 로컬 런타임으로 바로 가능합니다. 파일 읽기/쓰기 요청만 위에서 로컬 폴더를 먼저 지정해야 합니다.
-              </p>
+              <p className="mx-auto mt-2 max-w-4xl text-xs text-[#81786e]">Enter 전송 · Shift+Enter 줄바꿈 · cloud fallback 없음</p>
             </div>
           </section>
         </main>

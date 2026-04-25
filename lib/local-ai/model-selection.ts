@@ -31,9 +31,9 @@ export function getModelInstallCopy({
   if (selectedTier === "e4b" && installTier === "mobile-135m") {
     return {
       status: "E4B candidate · quick chat first",
-      headline: "바로 대답은 Mobile local 135M으로 시작합니다.",
-      detail: "E4B는 이 PC에서 시도할 만한 후보지만 브라우저 첫 대화에 자동 설치하지 않습니다. 먼저 Mobile local 135M으로 즉시 응답을 확인하고, E2B/E4B는 별도 품질 모델 설치로 다룹니다.",
-      nextAction: "Install Mobile local 135M",
+      headline: "바로 대답은 WebLLM fast model로 시작합니다.",
+      detail: "E4B는 이 PC에서 시도할 만한 후보지만 브라우저 첫 대화에 자동 설치하지 않습니다. 먼저 WebLLM Qwen2.5 0.5B q4f32 모델로 즉시 응답을 확인하고, E2B/E4B는 별도 고급 설치로 다룹니다.",
+      nextAction: "Install WebLLM fast model",
     };
   }
 
@@ -48,19 +48,19 @@ export function getModelInstallCopy({
 
   if (selectedTier === "e2b") {
     return {
-      status: "Recommended browser install",
-      headline: "Gemma 4 E2B를 이 브라우저에 설치해서 바로 대화합니다.",
-      detail: "모델 파일은 브라우저 캐시에 내려받고, 대화는 이 탭 안에서 로컬로 생성합니다. 파일 읽기/쓰기만 별도 폴더 선택이 필요합니다.",
-      nextAction: "Install Gemma 4 E2B",
+      status: "E2B quality candidate · quick chat first",
+      headline: "Gemma 4 E2B는 품질 후보이고, 첫 클릭 설치는 WebLLM으로 갑니다.",
+      detail: "E2B는 브라우저/드라이버 상태에 따라 fp16/WebGPU에서 막힐 수 있습니다. 그래서 '안녕' 같은 즉시 응답 확인은 WebLLM Qwen2.5 0.5B q4f32로 시작하고, Gemma 4는 별도 고급 설치/검증으로 분리합니다.",
+      nextAction: "Install WebLLM fast model",
     };
   }
 
   if (selectedTier === "mobile-135m") {
     return {
-      status: "Fastest local smoke runtime",
-      headline: "Mobile local 135M을 설치해서 가장 빠르게 로컬 응답을 확인합니다.",
-      detail: "품질은 낮지만 휴대폰/브라우저 캐시 한계에서도 실제 로컬 로드와 응답을 확인하기 가장 안전합니다.",
-      nextAction: "Install Mobile local 135M",
+      status: "WebLLM fast browser runtime",
+      headline: "WebLLM Qwen2.5 0.5B를 받아서 바로 대화합니다.",
+      detail: "WebLLM의 q4f32 사전 빌드 모델을 브라우저 캐시에 받고, Ready 이후 이 탭 안에서 바로 로컬 응답을 생성합니다. fp16이 막힌 브라우저에서도 첫 응답 경로가 무거운 Gemma로 빠지지 않습니다.",
+      nextAction: "Install WebLLM fast model",
     };
   }
 

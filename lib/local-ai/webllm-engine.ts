@@ -131,6 +131,16 @@ export function createWebLlmChatMessages(
   ];
 }
 
+function toWebLlmLoadError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/compatible GPU|No available adapters|WebGPU|adapter/i.test(message)) {
+    return new Error(
+      "WebGPU를 사용할 수 없어 WebLLM 모델을 시작하지 못했습니다. Chrome/Edge에서 하드웨어 가속과 WebGPU가 켜져 있는지 확인하세요.",
+    );
+  }
+  return error instanceof Error ? error : new Error(message);
+}
+
 export async function loadWebLlmLocalModel(
   options: LoadWebLlmLocalModelOptions = {},
 ): Promise<LoadedWebLlmLocalModel> {
@@ -149,11 +159,16 @@ export async function loadWebLlmLocalModel(
   const runtime = options.runtime ?? (await importWebLlmRuntime());
   options.onProgress?.({ status: "loading", message: `Downloading/loading ${WEBLLM_DEFAULT_MODEL_LABEL}`, progress: 0 });
 
-  const engine = await runtime.CreateMLCEngine(WEBLLM_DEFAULT_MODEL_ID, {
-    initProgressCallback(report) {
-      options.onProgress?.(normalizeProgress(report));
-    },
-  });
+  let engine: WebLlmEngine;
+  try {
+    engine = await runtime.CreateMLCEngine(WEBLLM_DEFAULT_MODEL_ID, {
+      initProgressCallback(report) {
+        options.onProgress?.(normalizeProgress(report));
+      },
+    });
+  } catch (error) {
+    throw toWebLlmLoadError(error);
+  }
 
   const loaded: LoadedWebLlmLocalModel = {
     kind: "webllm",

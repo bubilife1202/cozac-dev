@@ -92,6 +92,21 @@ test("generates a normal chat answer with the loaded WebLLM engine", async () =>
   assert.equal(mock.completionCalls[0]?.max_tokens, 64);
 });
 
+test("turns WebGPU adapter failures into a short actionable install error", async () => {
+  resetWebLlmEngineForTests();
+
+  await assert.rejects(
+    () => loadWebLlmLocalModel({
+      runtime: {
+        async CreateMLCEngine() {
+          throw new Error("Unable to find a compatible GPU. No available adapters.");
+        },
+      },
+    }),
+    /WebGPU를 사용할 수 없어 WebLLM 모델을 시작하지 못했습니다/,
+  );
+});
+
 test("extracts WebLLM OpenAI-compatible response text", () => {
   assert.equal(
     extractWebLlmAnswerText({ choices: [{ message: { content: "  Local answer  " } }] }),

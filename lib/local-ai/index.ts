@@ -7,6 +7,7 @@ export * from "./document-ingest";
 export * from "./embeddings";
 export * from "./file-system-adapter";
 export * from "./model-engine";
+export * from "./model-selection";
 export * from "./rag-agent-tool";
 export * from "./retrieval";
 export * from "./security";

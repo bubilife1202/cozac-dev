@@ -11,7 +11,9 @@ import {
   BrowserFolderAdapter,
   RUNNABLE_LOCAL_MODEL_ID as MOBILE_LOCAL_MODEL_ID,
   createLineDiffSummary,
+  getBrowserInstallTier,
   getChatInputKeyIntent,
+  getModelInstallCopy,
   isCommandExecutionRequest,
   isSecretLikePath,
   openLocalAiDatabase,
@@ -208,8 +210,8 @@ function buildDeviceSuitability(
   if (recommendation.tier === "e4b") {
     return {
       verdict: "good",
-      headline: "Gemma 4 E4B 기준으로 적합합니다",
-      body: "현재 브라우저 신호상 Gemma 4 E4B를 목표 모델로 잡는 편이 맞습니다. 다만 실제 브라우저 준비 경로는 아직 더 가벼운 호환 엔진을 사용합니다.",
+      headline: "E4B 후보지만 브라우저 첫 설치는 E2B입니다",
+      body: "현재 CPU / 메모리 / WebGPU 신호상 E4B를 시도할 여지는 있습니다. 하지만 이 브라우저에서 바로 설치하고 답변까지 검증할 시작점은 Gemma 4 E2B가 맞습니다.",
       chips,
     };
   }
@@ -241,10 +243,9 @@ function buildDeviceSuitability(
 }
 
 function getRecommendedGemma4Tier(recommendation: LocalAgentModelRecommendation): ModelTier {
-  if (recommendation.tier === "fallback") return "mobile-135m";
-  if (recommendation.tier === "e2b") return "e2b";
-  if (recommendation.tier === "e4b") return "e4b";
-  return "mobile-135m";
+  return getBrowserInstallTier(
+    recommendation.tier === "fallback" ? "smollm2-135m-instruct" : recommendation.tier === "e2b" ? "gemma-4-e2b" : recommendation.tier === "e4b" ? "gemma-4-e4b" : "unsupported",
+  );
 }
 
 function describeGemma4Tier(
@@ -269,10 +270,10 @@ function describeGemma4Tier(
 
   if (tier === "e2b") {
     return {
-      headline: "가벼운 Gemma 4 시작점",
+      headline: "검증된 Gemma 4 브라우저 시작점",
       detail:
         recommendedTier === "e2b"
-          ? "현재 브라우저 신호에서는 E2B가 가장 안전한 Gemma 4 선택입니다."
+          ? "이 PC는 E4B도 후보지만, 브라우저에서 먼저 설치하고 답변을 확인할 안정 경로는 E2B입니다."
           : "E2B는 이 기기에서 무난하게 돌릴 수 있는 하위 선택지입니다.",
       status: recommendedTier === "e2b" ? "recommended" : "fits",
     };
@@ -280,12 +281,12 @@ function describeGemma4Tier(
 
   if (tier === "e4b") {
     return {
-      headline: "이 기기에서 가장 먼저 볼 모델",
+      headline: "이 PC에서 시도 가능한 다음 후보",
       detail:
-        recommendedTier === "e4b"
-          ? "현재 CPU / 메모리 / WebGPU 신호 기준으로 E4B가 가장 적합합니다."
+        recommendation.tier === "e4b"
+          ? "CPU / 메모리 / WebGPU 신호상 후보는 맞지만, 지금 첫 설치/응답 검증은 E2B가 우선입니다."
           : "E4B는 가능할 수 있지만 지금 브라우저 신호상 E2B보다 무겁습니다.",
-      status: recommendedTier === "e4b" ? "recommended" : webgpu ? "heavy" : "avoid",
+      status: recommendation.tier === "e4b" ? "heavy" : webgpu ? "heavy" : "avoid",
     };
   }
 
@@ -356,7 +357,7 @@ const MODEL_TIERS: Array<{
     label: "Gemma 4",
     model: "E4B",
     description: "Best local default for stronger laptops",
-    badge: "Recommended",
+    badge: "Candidate",
     icon: Atom,
   },
   {
@@ -576,7 +577,7 @@ export function LocalAgentApp({
   const externalWorkbench = useMemo(() => mergeWorkbenchState(state), [state]);
   const [workbench, setWorkbench] = useState<LocalAgentWorkbenchState>(externalWorkbench);
   const [selectedRole, setSelectedRole] = useState<LocalAgentFolderRole>("code");
-  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("e4b");
+  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("e2b");
   const [prompt, setPrompt] = useState("");
   const [adapterNotice, setAdapterNotice] = useState<string | null>(null);
   const [detectedSignals, setDetectedSignals] = useState<ReturnType<typeof probeLocalAiCapabilities> | null>(null);
@@ -600,7 +601,7 @@ export function LocalAgentApp({
     {
       id: "initial-greeting",
       role: "assistant",
-      text: "안녕하세요. 여기서는 Gemma 4 기준 적합도를 먼저 보고, 필요하면 로컬 런타임을 준비한 뒤 대화할 수 있습니다.\n휴대폰에서는 폴더 지정 없이도 브라우저 저장소에 모델을 받아 로컬 대화부터 쓸 수 있고, 파일 작업만 Code / Materials / Output 폴더 지정이 필요합니다.",
+      text: "먼저 추천 설치 모델을 확인하세요. 이 PC는 E4B도 후보지만, 브라우저에서 바로 답을 확인할 첫 설치는 Gemma 4 E2B가 맞습니다.\n상단의 Install Gemma 4 E2B를 누르면 모델 파일을 브라우저 캐시에 받고, 설치 후에는 Enter로 바로 대화할 수 있습니다. 파일 읽기/쓰기만 Code / Materials / Output 폴더 지정이 필요합니다.",
       timestamp: "11:52 AM",
     },
   ]);
@@ -824,9 +825,10 @@ export function LocalAgentApp({
     }));
   }, []);
 
-  const handleLoadModel = useCallback(async () => {
-    const selectedModelId = getSelectedBrowserModelId(selectedModelTier);
-    const selectedModelLabel = getSelectedModelLabel(selectedModelTier);
+  const handleLoadModel = useCallback(async (tierOverride?: ModelTier) => {
+    const modelTier = tierOverride ?? selectedModelTier;
+    const selectedModelId = getSelectedBrowserModelId(modelTier);
+    const selectedModelLabel = getSelectedModelLabel(modelTier);
     if (!selectedModelId) {
       const message = `${selectedModelLabel}는 현재 브라우저에서 바로 돌리는 대신 Ollama 같은 네이티브 로컬 런타임 쪽이 맞습니다.`;
       setModelRun({
@@ -888,8 +890,13 @@ export function LocalAgentApp({
 
   const answerWithLocalModel = useCallback(
     async (userPrompt: string, localContext?: string) => {
-      const selectedModelId = getSelectedBrowserModelId(selectedModelTier);
-      const selectedModelLabel = getSelectedModelLabel(selectedModelTier);
+      const browserChatTier = selectedModelTier === "e4b" ? getRecommendedGemma4Tier(workbench.modelRecommendation) : selectedModelTier;
+      if (browserChatTier !== selectedModelTier) {
+        setSelectedModelTier(browserChatTier);
+        appendChatMessage("assistant", "E4B는 이 PC에서 시도 가능한 후보지만, 첫 브라우저 응답은 검증된 Gemma 4 E2B로 진행합니다.");
+      }
+      const selectedModelId = getSelectedBrowserModelId(browserChatTier);
+      const selectedModelLabel = getSelectedModelLabel(browserChatTier);
       if (!selectedModelId) {
         const message = `${selectedModelLabel}는 현재 브라우저 로컬 채팅 런타임이 아니라 네이티브 로컬 런타임(Ollama류) 대상으로 보는 게 맞습니다.`;
         appendChatMessage("assistant", message);
@@ -935,7 +942,7 @@ export function LocalAgentApp({
         status: "complete",
       });
     },
-    [addEvent, appendChatMessage, handleLoadModel, handleModelProgress, selectedModelTier]
+    [addEvent, appendChatMessage, handleLoadModel, handleModelProgress, selectedModelTier, workbench.modelRecommendation]
   );
 
   const handleSubmitPrompt = useCallback(async () => {
@@ -1044,9 +1051,18 @@ export function LocalAgentApp({
   );
 
   const selectedBrowserModelId = getSelectedBrowserModelId(selectedModelTier);
+  const recommendedInstallTier = getRecommendedGemma4Tier(workbench.modelRecommendation);
+  const currentInstallTier: ModelTier = selectedModelTier === "mobile-135m" || selectedModelTier === "e2b" ? selectedModelTier : recommendedInstallTier;
+  const installCopy = getModelInstallCopy({ selectedTier: selectedModelTier, installTier: currentInstallTier });
   const modelBusy = modelRun.status === "loading" || modelRun.status === "generating";
   const modelReady = modelRun.status === "ready" && loadedModelIdRef.current === selectedBrowserModelId;
   const pendingApprovalEvents = workbench.events.filter((event) => event.approvalRequired).slice(0, 3);
+  const handleInstallRecommendedModel = useCallback(async () => {
+    if (selectedModelTier !== currentInstallTier) {
+      setSelectedModelTier(currentInstallTier);
+    }
+    await handleLoadModel(currentInstallTier);
+  }, [currentInstallTier, handleLoadModel, selectedModelTier]);
 
   return (
     <div
@@ -1084,7 +1100,7 @@ export function LocalAgentApp({
             </span>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#e4e0da] bg-[#f5f2ee] px-4 py-2 text-sm font-medium text-[#6a6660]">
               <CheckCircle2 className="h-4 w-4" />
-              {modelReady ? `${getSelectedModelLabel(selectedModelTier)} ready` : modelBusy ? "Model loading" : "Model not loaded"}
+              {modelReady ? `${getSelectedModelLabel(selectedModelTier)} ready` : modelBusy ? "Model loading" : `${getSelectedModelLabel(recommendedInstallTier)} not installed`}
             </span>
             {inDesktopShell && (
               <button
@@ -1098,11 +1114,25 @@ export function LocalAgentApp({
           </div>
         </header>
 
-        <main className={cn("grid min-h-0 flex-1 bg-[#fcfbf8]", isMobile ? "grid-cols-1 overflow-auto" : "grid-cols-[360px_minmax(0,1fr)]") }>
-          <aside className="flex min-h-0 flex-col overflow-auto border-r border-[#e6e2dc] bg-[#fbfaf7] px-7 py-7">
-            <section>
+        <main className={cn("grid min-h-0 flex-1 bg-[#fcfbf8]", isMobile ? "grid-cols-1 overflow-auto" : "grid-cols-[420px_minmax(0,1fr)]") }>
+          <aside className="flex min-h-0 min-w-0 flex-col overflow-y-auto overflow-x-hidden border-r border-[#e6e2dc] bg-[#fbfaf7] px-5 py-5">
+            <section className="min-w-0">
               <div className="mb-3 text-lg font-medium tracking-[-0.02em] text-[#1d1c1a]">Model</div>
-              <div className="grid gap-3">
+              <div className="mb-4 rounded-[18px] border border-[#d8c7aa] bg-[#fff8ea] p-4 shadow-[0_10px_28px_rgba(74,55,24,0.08)]">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a683c]">{installCopy.status}</div>
+                <div className="mt-1 text-[15px] font-semibold leading-snug text-[#1d1c1a]">{installCopy.headline}</div>
+                <p className="mt-2 text-sm leading-relaxed text-[#5f5b55]">{installCopy.detail}</p>
+                <button
+                  type="button"
+                  onClick={() => void handleInstallRecommendedModel().catch(() => undefined)}
+                  disabled={modelBusy}
+                  className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-[#24221f] px-4 py-2.5 text-[15px] font-semibold text-white transition hover:scale-[1.01] hover:bg-[#171613] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Download className="h-4 w-4" />
+                  {modelReady ? "Reload local runtime" : modelBusy ? "Installing..." : installCopy.nextAction}
+                </button>
+              </div>
+              <div className="grid min-w-0 gap-3">
                 {MODEL_TIERS.map((tier) => {
                   const selected = selectedModelTier === tier.id;
                   const Icon = tier.icon;
@@ -1113,7 +1143,7 @@ export function LocalAgentApp({
                       type="button"
                       onClick={() => setSelectedModelTier(tier.id)}
                       className={cn(
-                        "group flex min-h-[80px] items-center gap-4 rounded-[16px] border bg-white px-4 py-3 text-left transition hover:border-[#c5aa7a] hover:bg-[#fffdf7]",
+                        "group flex min-h-[88px] w-full min-w-0 items-center gap-3 rounded-[16px] border bg-white px-3 py-3 text-left transition hover:border-[#c5aa7a] hover:bg-[#fffdf7]",
                         selected ? "border-[#b9975d] shadow-[0_0_0_1px_rgba(185,151,93,0.18)]" : "border-[#e7e2dc]"
                       )}
                       aria-pressed={selected}
@@ -1122,7 +1152,7 @@ export function LocalAgentApp({
                         <Icon className="h-6 w-6" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2 whitespace-nowrap text-[15px] font-semibold tracking-[-0.03em] text-[#1c1b19]">
+                        <span className="flex flex-wrap items-center gap-2 text-[15px] font-semibold tracking-[-0.03em] text-[#1c1b19]">
                           {tier.label} — {tier.model}
                           {(tier.badge || descriptor.status === "recommended") && (
                             <span className="rounded-[7px] bg-[#f3ebdf] px-1.5 py-1 text-[11px] font-medium text-[#8a683c]">
@@ -1134,8 +1164,8 @@ export function LocalAgentApp({
                         <span className="mt-1 block text-xs leading-relaxed text-[#8a837b]">{descriptor.detail}</span>
                       </span>
                       {selected && (
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1f1e1b] text-white">
-                          <CheckCircle2 className="h-4 w-4" />
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1f1e1b] text-white">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
                         </span>
                       )}
                     </button>
@@ -1166,18 +1196,6 @@ export function LocalAgentApp({
                   ))}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => void handleLoadModel().catch(() => undefined)}
-                disabled={modelBusy}
-                className="mt-4 flex min-h-[58px] w-full items-center justify-center gap-3 rounded-[16px] bg-[#24221f] px-4 py-3 text-[16px] font-semibold text-white transition hover:scale-[1.01] hover:bg-[#171613] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Download className="h-5 w-5" />
-                {modelReady ? "Reload local runtime" : modelBusy ? "Preparing local runtime..." : "Prepare local runtime"}
-              </button>
-              <p className="mt-2 text-xs leading-relaxed text-[#706a62]">
-                Gemma 4 series are shown here for device fit and model selection. The browser-side runtime is still using a lightweight compatibility engine during rollout.
-              </p>
               {(modelRun.status === "loading" || modelRun.status === "generating" || modelRun.status === "error") && (
                 <div className="mt-3 rounded-[14px] bg-[#f5f1ea] p-3 text-xs leading-relaxed text-[#69635c]">
                   <div className="flex items-center justify-between gap-3 font-medium uppercase tracking-[0.12em]">
@@ -1259,6 +1277,26 @@ export function LocalAgentApp({
           </aside>
 
           <section className="flex min-h-0 flex-col overflow-hidden bg-[#fffefa]">
+            {!modelReady && (
+              <div className="border-b border-[#ece5dc] bg-[#fff8ea] px-6 py-4 sm:px-9">
+                <div className="flex flex-col gap-3 rounded-[18px] border border-[#e2cfae] bg-white/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a683c]">Model setup</div>
+                    <div className="mt-1 text-base font-semibold text-[#1d1c1a]">{installCopy.headline}</div>
+                    <p className="mt-1 text-sm leading-relaxed text-[#5f5b55]">모델 설치는 이 버튼 한 번입니다. 설치 후에는 메시지를 보내면 이 브라우저 안에서 답합니다.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleInstallRecommendedModel().catch(() => undefined)}
+                    disabled={modelBusy}
+                    className="flex min-h-[46px] shrink-0 items-center justify-center gap-2 rounded-[14px] bg-[#24221f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#171613] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Download className="h-4 w-4" />
+                    {modelBusy ? "Installing..." : installCopy.nextAction}
+                  </button>
+                </div>
+              </div>
+            )}
             <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
               <div className="space-y-3 px-9 py-6">
                 {messages.map((message) => (

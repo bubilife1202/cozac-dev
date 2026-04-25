@@ -29,7 +29,7 @@ npm run prove:local-ai-e2b-model -- \
 
 The script intentionally uses the model-card AutoProcessor/AutoModel path instead of `/api/chat`, `MessageQueue`, a localhost bridge, a shell bridge, or any cloud LLM fallback.
 
-## 270M smoke proof must remain runnable
+## SmolLM2 135M smoke proof must remain runnable
 
 ```bash
 npm run prove:local-ai-model -- \
@@ -38,7 +38,7 @@ npm run prove:local-ai-model -- \
   --prompt "Name one thing a browser-local AI model can do."
 ```
 
-The app runtime still exposes the 270M ONNX model as the browser Local Agent v1 smoke model. The E2B script is a repeatable Node/Transformers.js proof that the selected 2B-class ONNX model can load and generate locally; it does not add a server, queue, localhost, shell, or cloud fallback path to the Local Agent UI.
+The app runtime now exposes the SmolLM2 135M ONNX model as the browser Local Agent v1 smoke model. The E2B script is a repeatable Node/Transformers.js proof that the selected 2B-class ONNX model can load and generate locally; it does not add a server, queue, localhost, shell, or cloud fallback path to the Local Agent UI.
 
 ## Verification evidence
 
@@ -56,7 +56,7 @@ proof:model_loaded elapsed_ms=2707 files_seen=18 downloads_done=19 ready_events=
 proof:answer "4"
 proof:done elapsed_ms=3327
 
-270M smoke proof: PASS
+SmolLM2 135M smoke proof: PASS
 Command:
 npm run prove:local-ai-model -- --cache-dir .omx/tmp/local-ai-model-cache --max-new-tokens 16 --prompt "Name one thing a browser-local AI model can do."
 Evidence:

@@ -9,7 +9,7 @@ import { useWindowFocus } from "@/lib/window-focus-context";
 import { WindowControls } from "@/components/window-controls";
 import {
   BrowserFolderAdapter,
-  RUNNABLE_LOCAL_MODEL_ID as PHONE_LOCAL_MODEL_ID,
+  RUNNABLE_LOCAL_MODEL_ID as MOBILE_LOCAL_MODEL_ID,
   createLineDiffSummary,
   isCommandExecutionRequest,
   isSecretLikePath,
@@ -101,12 +101,12 @@ function toUiModelRecommendation(recommendation: ReturnType<typeof recommendLoca
     ? 86
     : recommendation.tier === "gemma-4-e2b"
       ? 72
-      : recommendation.tier === "gemma-3-270m-it"
+      : recommendation.tier === "smollm2-135m-instruct"
         ? recommendation.status === "ready" ? 48 : 34
         : 8;
 
   return {
-    tier: recommendation.tier === "gemma-4-e4b" ? "e4b" : recommendation.tier === "gemma-4-e2b" ? "e2b" : recommendation.tier === "gemma-3-270m-it" ? "fallback" : "unsupported",
+    tier: recommendation.tier === "gemma-4-e4b" ? "e4b" : recommendation.tier === "gemma-4-e2b" ? "e2b" : recommendation.tier === "smollm2-135m-instruct" ? "fallback" : "unsupported",
     label: recommendation.label,
     reason: recommendation.reasons.join(" "),
     readiness,
@@ -240,10 +240,10 @@ function buildDeviceSuitability(
 }
 
 function getRecommendedGemma4Tier(recommendation: LocalAgentModelRecommendation): ModelTier {
-  if (recommendation.tier === "fallback") return "phone-270m";
+  if (recommendation.tier === "fallback") return "mobile-135m";
   if (recommendation.tier === "e2b") return "e2b";
   if (recommendation.tier === "e4b") return "e4b";
-  return "phone-270m";
+  return "mobile-135m";
 }
 
 function describeGemma4Tier(
@@ -255,7 +255,7 @@ function describeGemma4Tier(
   const memory = signals?.memoryGB ?? 0;
   const webgpu = signals?.webGPU ?? false;
 
-  if (tier === "phone-270m") {
+  if (tier === "mobile-135m") {
     return {
       headline: "휴대폰에서 먼저 쓰는 로컬 런타임",
       detail:
@@ -324,7 +324,7 @@ const RUNNABLE_LOCAL_MODEL_LABEL = "phone-safe local runtime";
 const GEMMA4_E2B_MODEL_ID = "onnx-community/gemma-4-E2B-it-ONNX";
 const GEMMA4_E4B_MODEL_ID = "onnx-community/gemma-4-E4B-it-ONNX";
 
-type ModelTier = "phone-270m" | "e2b" | "e4b" | "26b-a4b" | "31b";
+type ModelTier = "mobile-135m" | "e2b" | "e4b" | "26b-a4b" | "31b";
 
 const MODEL_TIERS: Array<{
   id: ModelTier;
@@ -335,7 +335,7 @@ const MODEL_TIERS: Array<{
   icon: typeof Zap;
 }> = [
   {
-    id: "phone-270m",
+    id: "mobile-135m",
     label: "Mobile local",
     model: "135M",
     description: "Phone-safe browser-local runtime",
@@ -377,14 +377,14 @@ const MODEL_TIERS: Array<{
 ];
 
 function getSelectedBrowserModelId(tier: ModelTier): string | null {
-  if (tier === "phone-270m") return PHONE_LOCAL_MODEL_ID;
+  if (tier === "mobile-135m") return MOBILE_LOCAL_MODEL_ID;
   if (tier === "e2b") return GEMMA4_E2B_MODEL_ID;
   if (tier === "e4b") return GEMMA4_E4B_MODEL_ID;
   return null;
 }
 
 function getSelectedModelLabel(tier: ModelTier): string {
-  if (tier === "phone-270m") return "Mobile local 135M";
+  if (tier === "mobile-135m") return "Mobile local 135M";
   if (tier === "e2b") return "Gemma 4 E2B";
   if (tier === "e4b") return "Gemma 4 E4B";
   if (tier === "26b-a4b") return "Gemma 4 26B A4B";

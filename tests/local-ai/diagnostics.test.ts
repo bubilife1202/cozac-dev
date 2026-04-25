@@ -20,12 +20,12 @@ test("recommends browser-local chat on phones even when folder access is unavail
   assert.equal(signals.browserName, "Safari");
   assert.equal(signals.osHint, "iOS");
   assert.equal(recommendation.status, "ready");
-  assert.equal(recommendation.tier, "gemma-3-270m-it");
+  assert.equal(recommendation.tier, "smollm2-135m-instruct");
   assert.match(recommendation.reasons.join(" "), /phone-safe local runtime/i);
   assert.match(recommendation.reasons.join(" "), /folder-free local chat/i);
 });
 
-test("recommends degraded 270M smoke mode when WebGPU is missing", () => {
+test("recommends degraded SmolLM2 135M smoke mode when WebGPU is missing", () => {
   const recommendation = recommendLocalModel({
     fileSystemAccess: true,
     webGPU: false,
@@ -37,7 +37,7 @@ test("recommends degraded 270M smoke mode when WebGPU is missing", () => {
   });
 
   assert.equal(recommendation.status, "degraded");
-  assert.equal(recommendation.tier, "gemma-3-270m-it");
+  assert.equal(recommendation.tier, "smollm2-135m-instruct");
 });
 
 test("recommends Gemma 4 E4B for high capability WebGPU devices", () => {

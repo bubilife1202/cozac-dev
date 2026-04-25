@@ -37,7 +37,7 @@ Expected static-check posture:
 - Node/shell execution imports or APIs must not appear in Local Agent code.
 - Cloud LLM fallback imports (`openai`, `@ai-sdk/openai`, Braintrust) must not appear in Local Agent code.
 - Any raw `fetch(` in Local Agent code requires manual review proving it does not send local file content, folder names, transcripts, diagnostics, chunks, embeddings, tool logs, or retrieval context to an app/server route.
-- `prove:local-ai-model` must still download/load/generate with the Gemma 270M ONNX smoke model.
+- `prove:local-ai-model` must still download/load/generate with the SmolLM2 135M ONNX smoke model.
 - `prove:local-ai-e2b-model` must download/load/generate with `onnx-community/gemma-3n-E2B-it-ONNX` through `AutoProcessor` + `AutoModelForImageTextToText` and the model-card dtype documented in `tasks/local-ai-e2b-model-proof.md`.
 
 ## Required manual browser verification
@@ -81,7 +81,7 @@ Network/observability:
 
 ```text
 Static: PASS/FAIL — bash tasks/verify-local-ai-static.sh — <summary>
-270M model proof: PASS/FAIL — npm run prove:local-ai-model -- --cache-dir .omx/tmp/local-ai-model-cache --max-new-tokens 16 — <answer/evidence>
+SmolLM2 135M model proof: PASS/FAIL — npm run prove:local-ai-model -- --cache-dir .omx/tmp/local-ai-model-cache --max-new-tokens 16 — <answer/evidence>
 E2B model proof: PASS/FAIL — npm run prove:local-ai-e2b-model -- --cache-dir .omx/tmp/local-ai-e2b-model-cache --max-new-tokens 16 — <answer/evidence>
 Lint: PASS/FAIL — npm run lint — <summary>
 Typecheck: PASS/FAIL — npm run typecheck — <summary>

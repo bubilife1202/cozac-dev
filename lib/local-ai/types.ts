@@ -79,7 +79,7 @@ export type LocalAiStoreName =
 
 export type ModelTier =
   | "unsupported"
-  | "gemma-3-270m-it"
+  | "smollm2-135m-instruct"
   | "gemma-4-e2b"
   | "gemma-4-e4b";
 

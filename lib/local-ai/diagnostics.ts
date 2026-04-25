@@ -83,7 +83,7 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
 
   if (isPhoneLikeOs(signals.osHint)) {
     return {
-      tier: "gemma-3-270m-it",
+      tier: "smollm2-135m-instruct",
       status: signals.webGPU ? "ready" : "degraded",
       label: "SmolLM2 135M phone-safe local runtime",
       reasons: [
@@ -97,7 +97,7 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
 
   if (!signals.webGPU) {
     return {
-      tier: "gemma-3-270m-it",
+      tier: "smollm2-135m-instruct",
       status: "degraded",
       label: "SmolLM2 135M browser fallback",
       reasons: ["WebGPU is unavailable; keep the current browser runtime on the runnable 135M ONNX fallback before attempting Gemma 4."],
@@ -137,7 +137,7 @@ export function recommendLocalModel(signals: CapabilitySignals): ModelRecommenda
   }
 
   return {
-    tier: "gemma-3-270m-it",
+    tier: "smollm2-135m-instruct",
     status: "ready",
     label: "SmolLM2 135M browser fallback",
     reasons,

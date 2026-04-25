@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 
-const MODEL_ID = "onnx-community/gemma-3-270m-it-ONNX";
+const MODEL_ID = "onnx-community/SmolLM2-135M-Instruct-ONNX";
 const DEFAULT_PROMPT = "Name one thing a browser-local AI model can do.";
 
 function parseArgs(argv) {
@@ -111,5 +111,5 @@ console.log(`proof:answer ${JSON.stringify(answer)}`);
 console.log(`proof:done elapsed_ms=${Math.round(performance.now() - started)}`);
 
 if (!answer) {
-  throw new Error("Gemma proof produced empty output");
+  throw new Error("SmolLM2 proof produced empty output");
 }

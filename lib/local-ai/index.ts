@@ -1,4 +1,5 @@
 export * from "./agent-core";
+export * from "./chat-input";
 export * from "./chunking";
 export * from "./diagnostics";
 export * from "./diff";

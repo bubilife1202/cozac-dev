@@ -11,6 +11,7 @@ import {
   BrowserFolderAdapter,
   RUNNABLE_LOCAL_MODEL_ID as MOBILE_LOCAL_MODEL_ID,
   createLineDiffSummary,
+  getChatInputKeyIntent,
   isCommandExecutionRequest,
   isSecretLikePath,
   openLocalAiDatabase,
@@ -946,6 +947,7 @@ export function LocalAgentApp({
     }
 
     appendChatMessage("user", trimmed);
+    setPrompt("");
 
     if (onSubmitPrompt) {
       await onSubmitPrompt(trimmed);
@@ -1300,21 +1302,39 @@ export function LocalAgentApp({
               </div>
             </ScrollArea>
 
-            <div className={cn("bg-[#fffefa] px-8 pb-4 pt-2", inShell ? "pb-24" : "")}>
-              <div className="flex items-end gap-3 rounded-[22px] border border-[#dfdbd4] bg-white px-5 py-2.5 shadow-[0_8px_28px_rgba(42,37,29,0.08)]">
+            <div className={cn("bg-[#fffefa] px-4 pb-4 pt-2 sm:px-8", inShell ? "pb-24" : "")}>
+              <div className="flex flex-col gap-3 rounded-[24px] border border-[#dfdbd4] bg-white px-4 py-3 shadow-[0_8px_28px_rgba(42,37,29,0.08)] sm:flex-row sm:items-end sm:px-5">
                 <Textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
-                  className="min-h-[36px] flex-1 resize-none border-0 bg-transparent p-0 text-[17px] text-[#2a2926] shadow-none placeholder:text-[#9b9690] focus-visible:ring-0"
-                  placeholder="메시지를 입력하세요"
+                  onKeyDown={(event) => {
+                    const intent = getChatInputKeyIntent({
+                      key: event.key,
+                      shiftKey: event.shiftKey,
+                      altKey: event.altKey,
+                      ctrlKey: event.ctrlKey,
+                      metaKey: event.metaKey,
+                      keyCode: event.nativeEvent.keyCode,
+                      isComposing: event.nativeEvent.isComposing,
+                    });
+
+                    if (intent !== "submit") return;
+
+                    event.preventDefault();
+                    void handleSubmitPrompt();
+                  }}
+                  rows={1}
+                  className="max-h-[160px] min-h-[52px] w-full flex-1 resize-none border-0 bg-transparent p-0 text-[16px] leading-relaxed text-[#2a2926] shadow-none placeholder:text-[#9b9690] focus-visible:ring-0 sm:text-[17px]"
+                  placeholder="메시지를 입력하세요 · Enter 전송 / Shift+Enter 줄바꿈"
                 />
                 <button
                   type="button"
                   onClick={() => void handleSubmitPrompt()}
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#262420] text-white transition hover:scale-[1.04] hover:bg-[#171613]"
+                  className="flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-full bg-[#262420] px-5 text-sm font-semibold text-white transition hover:scale-[1.02] hover:bg-[#171613] sm:w-12 sm:px-0"
                   aria-label="Send local prompt"
                 >
-                  <Send className="h-6 w-6" />
+                  <Send className="h-5 w-5 sm:h-6 sm:w-6" />
+                  <span className="sm:sr-only">Send</span>
                 </button>
               </div>
               <p className="mt-3 text-xs leading-relaxed text-[#7a746d]">

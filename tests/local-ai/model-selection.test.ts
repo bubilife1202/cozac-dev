@@ -3,21 +3,21 @@ import test from "node:test";
 
 import { getBrowserInstallTier, getModelInstallCopy } from "../../lib/local-ai/model-selection";
 
-test("uses Gemma 4 E2B as the safe browser install default when hardware can try E4B", () => {
-  assert.equal(getBrowserInstallTier("gemma-4-e4b"), "e2b");
+test("uses the fast Mobile local runtime as the default chat install even when hardware can try E4B", () => {
+  assert.equal(getBrowserInstallTier("gemma-4-e4b"), "mobile-135m");
 });
 
 test("keeps the phone-safe mobile runtime as the browser install default on fallback devices", () => {
   assert.equal(getBrowserInstallTier("smollm2-135m-instruct"), "mobile-135m");
 });
 
-test("explains that E4B is a capable-device candidate, not the first browser install", () => {
-  const copy = getModelInstallCopy({ selectedTier: "e4b", installTier: "e2b" });
+test("explains that E4B is a capable-device candidate, not the immediate chat install", () => {
+  const copy = getModelInstallCopy({ selectedTier: "e4b", installTier: "mobile-135m" });
 
   assert.match(copy.status, /candidate/i);
-  assert.match(copy.nextAction, /Install Gemma 4 E2B/i);
+  assert.match(copy.nextAction, /Install Mobile local 135M/i);
   assert.match(copy.detail, /E4B/);
-  assert.match(copy.detail, /E2B/);
+  assert.match(copy.detail, /Mobile local/);
 });
 
 test("keeps selected Mobile local install copy even on E2B-capable devices", () => {

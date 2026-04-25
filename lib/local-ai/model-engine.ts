@@ -306,7 +306,7 @@ function isGemma4ModelId(
 
 function isWebGpuAdapterUnavailableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /no available adapters|webgpu.*adapter|adapter.*webgpu/i.test(message);
+  return /no available adapters|no available backend|failed to get gpu adapter|webgpu.*adapter|adapter.*webgpu/i.test(message);
 }
 
 function dtypeCacheKey(dtype: BrowserLocalDType): string {
@@ -602,7 +602,7 @@ export class BrowserLocalModelEngine {
       : await loadRunnableLocalModel({
           transformers: this.options.transformers,
           dtype: RUNNABLE_LOCAL_MODEL_DTYPE,
-          preferWebGPU: this.snapshot.device === "webgpu",
+          preferWebGPU: false,
           onProgress: (progress) => {
             this.emit({ status: progress.status, detail: progress.message, progress: progress.progress });
           },

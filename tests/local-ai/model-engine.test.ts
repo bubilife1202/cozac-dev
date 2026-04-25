@@ -152,6 +152,28 @@ test("falls back to CPU when WebGPU reports no available adapter", async () => {
   assert.equal(calls[1]?.options.device, "wasm");
 });
 
+test("falls back to CPU when WebGPU backend creation fails without an adapter", async () => {
+  resetLocalModelEngineForTests();
+  const calls: Array<{ task: string; model: string; options: Record<string, unknown> }> = [];
+  const transformersRuntime = {
+    async pipeline(task: "text-generation", model: string, options?: Record<string, unknown>) {
+      calls.push({ task, model, options: options ?? {} });
+      if (options?.device === "webgpu") {
+        throw new Error('no available backend found. ERR: [webgpu] Error: Failed to get GPU adapter.');
+      }
+      const generator = async () => [{ generated_text: "CPU fallback answer" }];
+      return Object.assign(generator, { tokenizer: { mock: true } });
+    },
+  };
+
+  const engine = await loadRunnableLocalModel({ transformers: transformersRuntime, preferWebGPU: true });
+
+  assert.equal(engine.device, "cpu");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0]?.options.device, "webgpu");
+  assert.equal(calls[1]?.options.device, "wasm");
+});
+
 test("generates a local answer from chat messages and strips pipeline chat output", async () => {
   resetLocalModelEngineForTests();
   const mock = createMockTransformers("Use the selected folder only.");

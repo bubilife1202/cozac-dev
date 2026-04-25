@@ -16,8 +16,8 @@ export type ModelInstallCopy = {
 
 export function getBrowserInstallTier(recommendationTier: LocalAiRecommendationTier): BrowserRunnableModelTier {
   if (recommendationTier === "smollm2-135m-instruct") return "mobile-135m";
-  if (recommendationTier === "gemma-4-e2b") return "e2b";
-  if (recommendationTier === "gemma-4-e4b") return "e2b";
+  if (recommendationTier === "gemma-4-e2b") return "mobile-135m";
+  if (recommendationTier === "gemma-4-e4b") return "mobile-135m";
   return "mobile-135m";
 }
 
@@ -28,6 +28,15 @@ export function getModelInstallCopy({
   selectedTier: BrowserRunnableModelTier | "26b-a4b" | "31b";
   installTier: BrowserRunnableModelTier | "26b-a4b" | "31b";
 }): ModelInstallCopy {
+  if (selectedTier === "e4b" && installTier === "mobile-135m") {
+    return {
+      status: "E4B candidate · quick chat first",
+      headline: "바로 대답은 Mobile local 135M으로 시작합니다.",
+      detail: "E4B는 이 PC에서 시도할 만한 후보지만 브라우저 첫 대화에 자동 설치하지 않습니다. 먼저 Mobile local 135M으로 즉시 응답을 확인하고, E2B/E4B는 별도 품질 모델 설치로 다룹니다.",
+      nextAction: "Install Mobile local 135M",
+    };
+  }
+
   if (selectedTier === "e4b" && installTier === "e2b") {
     return {
       status: "E4B candidate · E2B first install",

@@ -10,6 +10,7 @@ import { WindowControls } from "@/components/window-controls";
 import {
   BrowserFolderAdapter,
   RUNNABLE_LOCAL_MODEL_ID as MOBILE_LOCAL_MODEL_ID,
+  clearLocalAiBrowserStorage,
   createLineDiffSummary,
   getBrowserInstallTier,
   getChatInputKeyIntent,
@@ -210,8 +211,8 @@ function buildDeviceSuitability(
   if (recommendation.tier === "e4b") {
     return {
       verdict: "good",
-      headline: "E4B 후보지만 브라우저 첫 설치는 E2B입니다",
-      body: "현재 CPU / 메모리 / WebGPU 신호상 E4B를 시도할 여지는 있습니다. 하지만 이 브라우저에서 바로 설치하고 답변까지 검증할 시작점은 Gemma 4 E2B가 맞습니다.",
+      headline: "이 PC는 E4B 후보지만, 즉시 대화는 Mobile 135M부터입니다",
+      body: "E4B/E2B는 품질 모델 후보입니다. 하지만 브라우저에서 '안녕' 같은 첫 응답을 바로 확인할 기본 런타임은 Mobile local 135M입니다. 무거운 Gemma 설치는 별도 선택으로 둡니다.",
       chips,
     };
   }
@@ -270,11 +271,11 @@ function describeGemma4Tier(
 
   if (tier === "e2b") {
     return {
-      headline: "검증된 Gemma 4 브라우저 시작점",
+      headline: "품질 모델 후보 — 별도 설치/검증 필요",
       detail:
-        recommendedTier === "e2b"
-          ? "이 PC는 E4B도 후보지만, 브라우저에서 먼저 설치하고 답변을 확인할 안정 경로는 E2B입니다."
-          : "E2B는 이 기기에서 무난하게 돌릴 수 있는 하위 선택지입니다.",
+        recommendedTier === "mobile-135m"
+          ? "이 PC에서 돌려볼 수는 있지만 첫 대화 자동 설치 대상은 아닙니다. 즉시 응답은 Mobile local 135M으로 시작하세요."
+          : "이 PC는 E4B도 후보지만, 브라우저에서 먼저 설치하고 답변을 확인할 안정 경로는 E2B입니다.",
       status: recommendedTier === "e2b" ? "recommended" : "fits",
     };
   }
@@ -284,7 +285,7 @@ function describeGemma4Tier(
       headline: "이 PC에서 시도 가능한 다음 후보",
       detail:
         recommendation.tier === "e4b"
-          ? "CPU / 메모리 / WebGPU 신호상 후보는 맞지만, 지금 첫 설치/응답 검증은 E2B가 우선입니다."
+          ? "CPU / 메모리 / WebGPU 신호상 후보는 맞지만, 첫 자동 응답과 설치 대상은 아닙니다. 먼저 Mobile 135M으로 정상 응답을 확인하세요."
           : "E4B는 가능할 수 있지만 지금 브라우저 신호상 E2B보다 무겁습니다.",
       status: recommendation.tier === "e4b" ? "heavy" : webgpu ? "heavy" : "avoid",
     };
@@ -577,7 +578,7 @@ export function LocalAgentApp({
   const externalWorkbench = useMemo(() => mergeWorkbenchState(state), [state]);
   const [workbench, setWorkbench] = useState<LocalAgentWorkbenchState>(externalWorkbench);
   const [selectedRole, setSelectedRole] = useState<LocalAgentFolderRole>("code");
-  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("e2b");
+  const [selectedModelTier, setSelectedModelTier] = useState<ModelTier>("mobile-135m");
   const [prompt, setPrompt] = useState("");
   const [adapterNotice, setAdapterNotice] = useState<string | null>(null);
   const [detectedSignals, setDetectedSignals] = useState<ReturnType<typeof probeLocalAiCapabilities> | null>(null);
@@ -601,7 +602,7 @@ export function LocalAgentApp({
     {
       id: "initial-greeting",
       role: "assistant",
-      text: "먼저 추천 설치 모델을 확인하세요. 이 PC는 E4B도 후보지만, 브라우저에서 바로 답을 확인할 첫 설치는 Gemma 4 E2B가 맞습니다.\n상단의 Install Gemma 4 E2B를 누르면 모델 파일을 브라우저 캐시에 받고, 설치 후에는 Enter로 바로 대화할 수 있습니다. 파일 읽기/쓰기만 Code / Materials / Output 폴더 지정이 필요합니다.",
+      text: "바로 대화하려면 Mobile local 135M부터 설치하세요. 이 모델은 품질은 낮지만 브라우저에서 빠르게 설치되고 즉시 응답 확인이 됩니다.\n이 PC는 Gemma 4 E2B/E4B도 후보지만, 무거운 모델은 별도 설치/검증 대상으로 둡니다. 설치를 지우려면 Clear local model storage를 누르면 브라우저 캐시와 Local Agent IndexedDB를 삭제합니다.",
       timestamp: "11:52 AM",
     },
   ]);
@@ -890,10 +891,14 @@ export function LocalAgentApp({
 
   const answerWithLocalModel = useCallback(
     async (userPrompt: string, localContext?: string) => {
-      const browserChatTier = selectedModelTier === "e4b" ? getRecommendedGemma4Tier(workbench.modelRecommendation) : selectedModelTier;
+      const selectedCandidateModelId = getSelectedBrowserModelId(selectedModelTier);
+      const browserChatTier =
+        (selectedModelTier === "e2b" || selectedModelTier === "e4b") && loadedModelIdRef.current !== selectedCandidateModelId
+          ? getRecommendedGemma4Tier(workbench.modelRecommendation)
+          : selectedModelTier;
       if (browserChatTier !== selectedModelTier) {
         setSelectedModelTier(browserChatTier);
-        appendChatMessage("assistant", "E4B는 이 PC에서 시도 가능한 후보지만, 첫 브라우저 응답은 검증된 Gemma 4 E2B로 진행합니다.");
+        appendChatMessage("assistant", "Gemma 4는 품질 모델 후보라서 자동으로 무거운 설치를 시작하지 않습니다. 먼저 Mobile local 135M으로 즉시 응답을 확인합니다.");
       }
       const selectedModelId = getSelectedBrowserModelId(browserChatTier);
       const selectedModelLabel = getSelectedModelLabel(browserChatTier);
@@ -1020,6 +1025,25 @@ export function LocalAgentApp({
     }
   }, [addEvent, answerWithLocalModel, appendChatMessage, blockSecret, onSubmitPrompt, prompt, readPath, selectedFolder, selectedRole, writePath]);
 
+  const handleClearLocalModelStorage = useCallback(async () => {
+    modelSessionRef.current = null;
+    loadedModelIdRef.current = null;
+    setModelRun({
+      status: "idle",
+      message: "Local model storage was reset. Install Mobile local 135M again to chat.",
+      progress: undefined,
+      answer: undefined,
+      error: undefined,
+    });
+
+    const result = await clearLocalAiBrowserStorage();
+    const detail = result.errors.length
+      ? `Reset attempted, but some storage could not be cleared: ${result.errors.join("; ")}`
+      : `Deleted Local Agent IndexedDB${result.deletedDatabase ? "" : " (not present or blocked)"} and ${result.deletedCaches.length} model/cache bucket(s).`;
+    addEvent({ title: "Local model storage cleared", detail, status: result.errors.length ? "blocked" : "complete" });
+    appendChatMessage("assistant", result.errors.length ? detail : "로컬 모델/세션 저장소를 지웠습니다. 다시 쓰려면 Install Mobile local 135M을 누르세요.");
+  }, [addEvent, appendChatMessage]);
+
   const handleReviewSecret = useCallback(
     async (eventId: string) => {
       if (onReviewSecretOperation) {
@@ -1129,7 +1153,15 @@ export function LocalAgentApp({
                   className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-[#24221f] px-4 py-2.5 text-[15px] font-semibold text-white transition hover:scale-[1.01] hover:bg-[#171613] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Download className="h-4 w-4" />
-                  {modelReady ? "Reload local runtime" : modelBusy ? "Installing..." : installCopy.nextAction}
+                  {modelReady ? `${getSelectedModelLabel(selectedModelTier)} installed` : modelBusy ? "Installing..." : installCopy.nextAction}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleClearLocalModelStorage().catch(() => undefined)}
+                  disabled={modelBusy}
+                  className="mt-2 flex min-h-[40px] w-full items-center justify-center rounded-[12px] border border-[#d8d1c8] bg-white px-3 py-2 text-sm font-semibold text-[#5f5b55] transition hover:bg-[#fbf7ef] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Clear local model storage
                 </button>
               </div>
               <div className="grid min-w-0 gap-3">
@@ -1283,7 +1315,7 @@ export function LocalAgentApp({
                   <div className="min-w-0">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a683c]">Model setup</div>
                     <div className="mt-1 text-base font-semibold text-[#1d1c1a]">{installCopy.headline}</div>
-                    <p className="mt-1 text-sm leading-relaxed text-[#5f5b55]">모델 설치는 이 버튼 한 번입니다. 설치 후에는 메시지를 보내면 이 브라우저 안에서 답합니다.</p>
+                    <p className="mt-1 text-sm leading-relaxed text-[#5f5b55]">모델 설치는 이 버튼 한 번입니다. 설치 완료는 상단 상태가 ready로 바뀌고 버튼이 installed로 바뀌면 확인됩니다. 지우기는 Clear local model storage입니다.</p>
                   </div>
                   <button
                     type="button"
@@ -1293,6 +1325,14 @@ export function LocalAgentApp({
                   >
                     <Download className="h-4 w-4" />
                     {modelBusy ? "Installing..." : installCopy.nextAction}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleClearLocalModelStorage().catch(() => undefined)}
+                    disabled={modelBusy}
+                    className="flex min-h-[46px] shrink-0 items-center justify-center rounded-[14px] border border-[#d8d1c8] bg-white px-4 py-2 text-sm font-semibold text-[#5f5b55] transition hover:bg-[#fbf7ef] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Clear local model storage
                   </button>
                 </div>
               </div>

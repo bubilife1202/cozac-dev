@@ -10,6 +10,10 @@ import { WindowControls } from "@/components/window-controls";
 import {
   BrowserFolderAdapter,
   type BrowserLocalRuntimeFamily,
+  GEMMA4_E2B_MODEL_ID,
+  GEMMA4_E2B_MODEL_LABEL,
+  GEMMA4_E4B_MODEL_ID,
+  GEMMA4_E4B_MODEL_LABEL,
   WEBLLM_BROWSER_MODELS,
   WEBLLM_DEFAULT_MODEL_LABEL,
   RUNNABLE_LOCAL_MODEL_ID,
@@ -312,7 +316,49 @@ type SelectedBrowserModel = {
   sizeLabel: string;
   speedLabel: "Fast" | "Balanced" | "Strong" | "Heavy";
   description: string;
+  badge?: string;
+  guardCopy?: string;
 };
+
+const MOBILE_FALLBACK_BROWSER_MODEL: SelectedBrowserModel = {
+  family: "transformers",
+  id: RUNNABLE_LOCAL_MODEL_ID,
+  label: RUNNABLE_LOCAL_MODEL_LABEL,
+  shortLabel: "SmolLM2 135M",
+  sizeLabel: "135M",
+  speedLabel: "Fast",
+  description: "Mobile fallback model for CPU/WASM local chat on phones, missing WebGPU, or failed adapter checks.",
+  badge: "Mobile fallback",
+};
+
+const ADVANCED_BROWSER_LOCAL_MODELS: SelectedBrowserModel[] = [
+  {
+    family: "transformers",
+    id: GEMMA4_E2B_MODEL_ID,
+    label: GEMMA4_E2B_MODEL_LABEL,
+    shortLabel: "Gemma 4 E2B",
+    sizeLabel: "~5.7GB",
+    speedLabel: "Heavy",
+    badge: "Verified heavy local model",
+    description: "Gemma 4 E2B ONNX path with actual local load + generation proof; use on strong desktop Chrome/Edge only.",
+    guardCopy: "Gemma heavy models are disabled on phone-like fallback devices. Use SmolLM2 135M CPU/WASM fallback on mobile.",
+  },
+  {
+    family: "transformers",
+    id: GEMMA4_E4B_MODEL_ID,
+    label: GEMMA4_E4B_MODEL_LABEL,
+    shortLabel: "Gemma 4 E4B",
+    sizeLabel: "E4B",
+    speedLabel: "Heavy",
+    badge: "Experimental / unverified",
+    description: "Higher-quality Gemma 4 candidate for very strong desktop browsers; exact E4B load/generation proof is not completed yet.",
+    guardCopy: "Gemma heavy models are disabled on phone-like fallback devices. Use SmolLM2 135M CPU/WASM fallback on mobile.",
+  },
+];
+
+function getTransformersBrowserModel(modelIdOverride?: string): SelectedBrowserModel {
+  return [MOBILE_FALLBACK_BROWSER_MODEL, ...ADVANCED_BROWSER_LOCAL_MODELS].find((model) => model.id === modelIdOverride) ?? MOBILE_FALLBACK_BROWSER_MODEL;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -458,6 +504,7 @@ export function LocalAgentApp({
   const [workbench, setWorkbench] = useState<LocalAgentWorkbenchState>(externalWorkbench);
   const [selectedRole, setSelectedRole] = useState<LocalAgentFolderRole>("code");
   const [selectedWebLlmModelId, setSelectedWebLlmModelId] = useState(WEBLLM_BROWSER_MODELS[0]?.id ?? "Qwen2.5-0.5B-Instruct-q4f32_1-MLC");
+  const [selectedTransformersModelId, setSelectedTransformersModelId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [adapterNotice, setAdapterNotice] = useState<string | null>(null);
   const [deviceSuitability, setDeviceSuitability] = useState<DeviceSuitability>(() =>
@@ -491,7 +538,7 @@ export function LocalAgentApp({
     {
       id: "initial-greeting",
       role: "assistant",
-      text: "WebLLM처럼 바로 쓰는 흐름으로 바꿨습니다. 왼쪽에서 Qwen2.5, SmolLM2, Llama 같은 브라우저 모델을 고르고 Download selected model을 누르면 모델을 브라우저 캐시에 받습니다. Ready 이후 '안녕' 같은 일반 대화에 바로 답합니다.\nGemma 4 E2B/E4B는 이 PC에서 시도 가능한 품질 후보지만 이 화면의 첫 흐름은 WebLLM 모델 선택과 채팅입니다. 설치를 지우려면 Clear downloaded model을 누르세요.",
+      text: "WebLLM처럼 바로 쓰는 흐름에 Gemma 고급 선택지를 붙였습니다. 왼쪽에서 Qwen2.5, SmolLM2, Llama 같은 WebLLM 모델을 고르거나 Advanced local models에서 Gemma 4 E2B/E4B를 직접 선택한 뒤 Download selected model을 누르면 됩니다.\nGemma 4 E2B는 실제 로드/생성 proof가 끝난 heavy 모델이고, Gemma 4 E4B는 아직 Experimental / unverified 후보입니다. 모바일/phone-like fallback에서는 무거운 Gemma 대신 SmolLM2 135M CPU/WASM을 씁니다.",
       timestamp: "11:52 AM",
     },
   ]);
@@ -714,20 +761,30 @@ export function LocalAgentApp({
   }, []);
 
   const selectedWebLlmModel = useMemo(() => getWebLlmBrowserModel(selectedWebLlmModelId), [selectedWebLlmModelId]);
-  const mobileFallbackModel = useMemo<SelectedBrowserModel>(() => ({
-    family: "transformers",
-    id: RUNNABLE_LOCAL_MODEL_ID,
-    label: RUNNABLE_LOCAL_MODEL_LABEL,
-    shortLabel: "SmolLM2 135M",
-    sizeLabel: "135M",
-    speedLabel: "Fast",
-    description: "Mobile fallback model for CPU/WASM local chat on phones, missing WebGPU, or failed adapter checks.",
-  }), []);
-  const selectedModel = useMemo<SelectedBrowserModel>(() => (
-    runtimeProfile.recommendedFamily === "transformers"
-      ? mobileFallbackModel
-      : selectedWebLlmModel
-  ), [mobileFallbackModel, runtimeProfile.recommendedFamily, selectedWebLlmModel]);
+  const selectedTransformersModel = useMemo(() => getTransformersBrowserModel(selectedTransformersModelId ?? undefined), [selectedTransformersModelId]);
+  const heavyModelSelectionDisabled = runtimeProfile.isPhoneLike || runtimeProfile.recommendedFamily !== "webllm" || runtimeProfile.status === "blocked";
+  const selectedModel = useMemo<SelectedBrowserModel>(() => {
+    if (selectedTransformersModelId) {
+      return selectedTransformersModel;
+    }
+
+    return runtimeProfile.recommendedFamily === "transformers"
+      ? MOBILE_FALLBACK_BROWSER_MODEL
+      : selectedWebLlmModel;
+  }, [runtimeProfile.recommendedFamily, selectedTransformersModel, selectedTransformersModelId, selectedWebLlmModel]);
+
+  useEffect(() => {
+    if (!heavyModelSelectionDisabled || !selectedTransformersModelId) return;
+
+    setSelectedTransformersModelId(null);
+    if (ADVANCED_BROWSER_LOCAL_MODELS.some((model) => loadedModelIdRef.current === model.id)) {
+      modelSessionRef.current = null;
+    }
+    setModelRun({
+      status: "idle",
+      message: "Gemma heavy models are disabled on phone-like fallback devices. Use SmolLM2 135M CPU/WASM fallback on mobile.",
+    });
+  }, [heavyModelSelectionDisabled, selectedTransformersModelId]);
 
   const handleCheckThisDevice = useCallback(async () => {
     const { capabilities, recommendation, signals } = createCapabilityCards();
@@ -757,6 +814,7 @@ export function LocalAgentApp({
       status: nextProfile.status === "blocked" ? "blocked" : "complete",
     });
     if (nextProfile.recommendedFamily === "transformers") {
+      setSelectedTransformersModelId(null);
       setModelRun({
         status: "idle",
         message: "Mobile fallback selected: SmolLM2 135M on CPU/WASM. Download selected model to chat locally.",
@@ -766,7 +824,7 @@ export function LocalAgentApp({
 
   const handleLoadModel = useCallback(async (modelIdOverride?: string, familyOverride?: BrowserLocalRuntimeFamily) => {
     const selectedModel: SelectedBrowserModel = familyOverride === "transformers"
-      ? mobileFallbackModel
+      ? getTransformersBrowserModel(modelIdOverride)
       : getWebLlmBrowserModel(modelIdOverride ?? selectedWebLlmModelId);
 
     setModelRun({
@@ -815,7 +873,7 @@ export function LocalAgentApp({
       });
       throw error;
     }
-  }, [addEvent, handleModelProgress, mobileFallbackModel, selectedWebLlmModelId]);
+  }, [addEvent, handleModelProgress, selectedWebLlmModelId]);
 
   const answerWithLocalModel = useCallback(
     async (userPrompt: string, localContext?: string) => {
@@ -992,7 +1050,7 @@ export function LocalAgentApp({
   );
 
   const modelBusy = modelRun.status === "loading" || modelRun.status === "generating";
-  const modelReady = modelRun.status === "ready" && loadedModelIdRef.current === selectedModel.id;
+  const modelReady = modelRun.status === "ready" && loadedModelIdRef.current === selectedModel.id && loadedModelFamilyRef.current === selectedModel.family;
   const pendingApprovalEvents = workbench.events.filter((event) => event.approvalRequired).slice(0, 3);
   const handleInstallSelectedModel = useCallback(async () => {
     await handleLoadModel(selectedModel.id, selectedModel.family);
@@ -1045,7 +1103,7 @@ export function LocalAgentApp({
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9a7240]">Select browser model</div>
                   <div className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[#171615]">{selectedModel.shortLabel}</div>
-                  <p className="mt-1 text-sm leading-relaxed text-[#67615a]">WebLLM 모델을 고르고 브라우저 캐시에 다운로드한 뒤 이 탭에서 바로 채팅합니다.</p>
+                  <p className="mt-1 text-sm leading-relaxed text-[#67615a]">WebLLM fast path 또는 Advanced Gemma ONNX 모델을 고르고 브라우저 캐시에 다운로드한 뒤 이 탭에서 바로 채팅합니다.</p>
                 </div>
                 <span className="rounded-full bg-[#f2eadf] px-2.5 py-1 text-[11px] font-semibold text-[#8a6332]">{selectedModel.speedLabel}</span>
               </div>
@@ -1074,8 +1132,9 @@ export function LocalAgentApp({
                     key={model.id}
                     type="button"
                     onClick={() => {
+                      setSelectedTransformersModelId(null);
                       setSelectedWebLlmModelId(model.id);
-                      if (loadedModelIdRef.current !== model.id) {
+                      if (loadedModelIdRef.current !== model.id || loadedModelFamilyRef.current !== "webllm") {
                         modelSessionRef.current = null;
                         setModelRun({
                           status: "idle",
@@ -1085,7 +1144,7 @@ export function LocalAgentApp({
                     }}
                     className={cn(
                       "w-full rounded-2xl border px-3 py-2.5 text-left transition hover:bg-[#fffdf8]",
-                      selectedWebLlmModel.id === model.id ? "border-[#171615] bg-[#fff8ea]" : "border-[#e6e0d8] bg-white",
+                      selectedModel.family === "webllm" && selectedWebLlmModel.id === model.id ? "border-[#171615] bg-[#fff8ea]" : "border-[#e6e0d8] bg-white",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -1097,6 +1156,55 @@ export function LocalAgentApp({
                 ))}
               </div>
               <p className="mt-3 text-xs leading-relaxed text-[#81786e]">Quick picks include Qwen2.5 0.5B, SmolLM2 360M, Llama 3.2 1B, Qwen2.5 1.5B.</p>
+
+              <div className="mt-4 rounded-2xl border border-[#e5ded2] bg-[#fffdf8] p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9a7240]">Advanced local models</div>
+                    <p className="mt-1 text-xs leading-relaxed text-[#67615a]">Gemma 4 E2B/E4B run through the Transformers/ONNX path. They are explicit heavy choices, not the mobile default.</p>
+                  </div>
+                  {heavyModelSelectionDisabled && (
+                    <span className="shrink-0 rounded-full bg-[#fff0e4] px-2 py-1 text-[10px] font-bold uppercase text-[#9a4f25]">guarded</span>
+                  )}
+                </div>
+                {heavyModelSelectionDisabled && (
+                  <p className="mt-2 rounded-xl bg-[#fff5ed] px-3 py-2 text-xs font-semibold leading-relaxed text-[#8a4d24]">
+                    Gemma heavy models are disabled on phone-like fallback devices. Use SmolLM2 135M CPU/WASM fallback on mobile.
+                  </p>
+                )}
+                <div className="mt-3 grid gap-2">
+                  {ADVANCED_BROWSER_LOCAL_MODELS.map((model) => (
+                    <button
+                      key={model.id}
+                      type="button"
+                      disabled={modelBusy || heavyModelSelectionDisabled}
+                      onClick={() => {
+                        if (heavyModelSelectionDisabled) return;
+                        setSelectedTransformersModelId(model.id);
+                        if (loadedModelIdRef.current !== model.id || loadedModelFamilyRef.current !== model.family) {
+                          modelSessionRef.current = null;
+                          setModelRun({
+                            status: "idle",
+                            message: `${model.shortLabel} selected. Download selected model to chat locally. ${model.badge ?? ""}`.trim(),
+                          });
+                        }
+                      }}
+                      className={cn(
+                        "w-full rounded-2xl border px-3 py-2.5 text-left transition",
+                        selectedModel.family === model.family && selectedModel.id === model.id ? "border-[#171615] bg-[#fff8ea]" : "border-[#e6e0d8] bg-white",
+                        heavyModelSelectionDisabled ? "cursor-not-allowed opacity-60" : "hover:bg-[#fffdf8]",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-sm font-semibold text-[#211f1b]">{model.shortLabel}</span>
+                        <span className="rounded-full bg-[#f3eee7] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#81786e]">{model.sizeLabel}</span>
+                      </div>
+                      <div className="mt-1 text-[11px] font-bold text-[#9a7240]">{model.badge}</div>
+                      <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-[#777068]">{heavyModelSelectionDisabled ? model.guardCopy : model.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <button
                 type="button"

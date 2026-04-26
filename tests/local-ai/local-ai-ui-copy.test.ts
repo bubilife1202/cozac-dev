@@ -35,3 +35,24 @@ test("checks each visitor device and exposes a mobile CPU fallback path", () => 
   assert.match(localAiAppSource, /CPU\/WASM/);
   assert.match(localAiAppSource, /resolveLocalModelEngine\(selectedModel\.family\)/);
 });
+
+test("exposes Gemma 4 E2B and E4B as explicit advanced browser-local model choices", () => {
+  assert.match(localAiAppSource, /ADVANCED_BROWSER_LOCAL_MODELS/);
+  assert.match(localAiAppSource, /Gemma 4 E2B/);
+  assert.match(localAiAppSource, /Gemma 4 E4B/);
+  assert.match(localAiAppSource, /Verified heavy local model/);
+  assert.match(localAiAppSource, /Experimental \/ unverified/);
+  assert.match(localAiAppSource, /Advanced local models/);
+});
+
+test("keeps heavy Gemma choices guarded on phone-like fallback devices", () => {
+  assert.match(localAiAppSource, /heavyModelSelectionDisabled/);
+  assert.match(localAiAppSource, /Gemma heavy models are disabled on phone-like fallback devices/);
+  assert.match(localAiAppSource, /Use SmolLM2 135M CPU\/WASM fallback on mobile/);
+});
+
+test("routes explicit Transformers model IDs instead of collapsing every Transformers choice to SmolLM2", () => {
+  assert.match(localAiAppSource, /getTransformersBrowserModel\(modelIdOverride/);
+  assert.doesNotMatch(localAiAppSource, /familyOverride === "transformers"\s*\?\s*mobileFallbackModel/);
+  assert.match(localAiAppSource, /loadedModelFamilyRef\.current === selectedModel\.family/);
+});

@@ -1,5 +1,6 @@
 export * from "./agent-core";
 export * from "./chat-input";
+export * from "./browser-runtime-profile";
 export * from "./chunking";
 export * from "./diagnostics";
 export * from "./diff";

@@ -9,9 +9,13 @@ import { useWindowFocus } from "@/lib/window-focus-context";
 import { WindowControls } from "@/components/window-controls";
 import {
   BrowserFolderAdapter,
+  type BrowserLocalRuntimeFamily,
   WEBLLM_BROWSER_MODELS,
   WEBLLM_DEFAULT_MODEL_LABEL,
+  RUNNABLE_LOCAL_MODEL_ID,
+  RUNNABLE_LOCAL_MODEL_LABEL,
   clearLocalAiBrowserStorage,
+  chooseBrowserLocalRuntime,
   createLineDiffSummary,
   getChatInputKeyIntent,
   getWebLlmBrowserModel,
@@ -300,6 +304,16 @@ type ResolvedLocalModelEngine = {
   generate: LocalModelGenerator;
 };
 
+type SelectedBrowserModel = {
+  family: Exclude<BrowserLocalRuntimeFamily, "none">;
+  id: string;
+  label: string;
+  shortLabel: string;
+  sizeLabel: string;
+  speedLabel: "Fast" | "Balanced" | "Strong" | "Heavy";
+  description: string;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -379,8 +393,10 @@ function pickFunction(module: LocalModelEngineModule, names: string[]): unknown 
   return undefined;
 }
 
-async function resolveLocalModelEngine(): Promise<ResolvedLocalModelEngine> {
-  const engineModule = (await import("@/lib/local-ai/webllm-engine")) as unknown as LocalModelEngineModule;
+async function resolveLocalModelEngine(family: BrowserLocalRuntimeFamily = "webllm"): Promise<ResolvedLocalModelEngine> {
+  const engineModule = (family === "transformers"
+    ? await import("@/lib/local-ai/model-engine")
+    : await import("@/lib/local-ai/webllm-engine")) as unknown as LocalModelEngineModule;
   const load = pickFunction(engineModule, [
     "loadBrowserLocalModel",
     "loadLocalModel",
@@ -456,6 +472,17 @@ export function LocalAgentApp({
       DEFAULT_MODEL_RECOMMENDATION,
     ),
   );
+  const [runtimeProfile, setRuntimeProfile] = useState(() =>
+    chooseBrowserLocalRuntime(
+      probeLocalAiCapabilities({
+        fileSystemAccess: false,
+        indexedDB: false,
+        webGPU: false,
+        browserName: "Unknown browser",
+        osHint: "Unknown OS",
+      }),
+    ),
+  );
   const [modelRun, setModelRun] = useState<LocalModelUiState>({
     status: "idle",
     message: `${WEBLLM_DEFAULT_MODEL_LABEL} is the current browser download path for Local Agent.`,
@@ -471,8 +498,10 @@ export function LocalAgentApp({
   const adaptersRef = useRef<Partial<Record<LocalAgentFolderRole, BrowserFolderAdapter>>>({});
   const pendingSecretsRef = useRef<Record<string, PendingSecretOperation>>({});
   const modelEngineRef = useRef<ResolvedLocalModelEngine | null>(null);
+  const modelEngineFamilyRef = useRef<BrowserLocalRuntimeFamily | null>(null);
   const modelSessionRef = useRef<unknown>(null);
   const loadedModelIdRef = useRef<string | null>(null);
+  const loadedModelFamilyRef = useRef<BrowserLocalRuntimeFamily | null>(null);
   const windowFocus = useWindowFocus();
   const inDesktopShell = Boolean(inShell && windowFocus);
 
@@ -492,6 +521,7 @@ export function LocalAgentApp({
       modelRecommendation: recommendation,
     }));
     setDeviceSuitability(buildDeviceSuitability(signals, recommendation));
+    setRuntimeProfile(chooseBrowserLocalRuntime(signals));
 
 
     void openLocalAiDatabase()
@@ -683,8 +713,61 @@ export function LocalAgentApp({
     }));
   }, []);
 
-  const handleLoadModel = useCallback(async (modelIdOverride?: string) => {
-    const selectedModel = getWebLlmBrowserModel(modelIdOverride ?? selectedWebLlmModelId);
+  const selectedWebLlmModel = useMemo(() => getWebLlmBrowserModel(selectedWebLlmModelId), [selectedWebLlmModelId]);
+  const mobileFallbackModel = useMemo<SelectedBrowserModel>(() => ({
+    family: "transformers",
+    id: RUNNABLE_LOCAL_MODEL_ID,
+    label: RUNNABLE_LOCAL_MODEL_LABEL,
+    shortLabel: "SmolLM2 135M",
+    sizeLabel: "135M",
+    speedLabel: "Fast",
+    description: "Mobile fallback model for CPU/WASM local chat on phones, missing WebGPU, or failed adapter checks.",
+  }), []);
+  const selectedModel = useMemo<SelectedBrowserModel>(() => (
+    runtimeProfile.recommendedFamily === "transformers"
+      ? mobileFallbackModel
+      : selectedWebLlmModel
+  ), [mobileFallbackModel, runtimeProfile.recommendedFamily, selectedWebLlmModel]);
+
+  const handleCheckThisDevice = useCallback(async () => {
+    const { capabilities, recommendation, signals } = createCapabilityCards();
+    setWorkbench((current) => ({
+      ...current,
+      capabilities,
+      modelRecommendation: recommendation,
+    }));
+    setDeviceSuitability(buildDeviceSuitability(signals, recommendation));
+    let webGpuAdapterAvailable: boolean | null = null;
+    if (signals.webGPU && typeof navigator !== "undefined" && "gpu" in navigator) {
+      try {
+        const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+        webGpuAdapterAvailable = Boolean(await gpu?.requestAdapter());
+      } catch {
+        webGpuAdapterAvailable = false;
+      }
+    } else {
+      webGpuAdapterAvailable = false;
+    }
+
+    const nextProfile = chooseBrowserLocalRuntime(signals, { webGpuAdapterAvailable });
+    setRuntimeProfile(nextProfile);
+    addEvent({
+      title: "Device runtime checked",
+      detail: `${nextProfile.recommendedLabel}: ${nextProfile.reason}`,
+      status: nextProfile.status === "blocked" ? "blocked" : "complete",
+    });
+    if (nextProfile.recommendedFamily === "transformers") {
+      setModelRun({
+        status: "idle",
+        message: "Mobile fallback selected: SmolLM2 135M on CPU/WASM. Download selected model to chat locally.",
+      });
+    }
+  }, [addEvent]);
+
+  const handleLoadModel = useCallback(async (modelIdOverride?: string, familyOverride?: BrowserLocalRuntimeFamily) => {
+    const selectedModel: SelectedBrowserModel = familyOverride === "transformers"
+      ? mobileFallbackModel
+      : getWebLlmBrowserModel(modelIdOverride ?? selectedWebLlmModelId);
 
     setModelRun({
       status: "loading",
@@ -693,14 +776,18 @@ export function LocalAgentApp({
     });
 
     try {
-      const engine = modelEngineRef.current ?? (await resolveLocalModelEngine());
+      const engine = modelEngineFamilyRef.current === selectedModel.family && modelEngineRef.current
+        ? modelEngineRef.current
+        : await resolveLocalModelEngine(selectedModel.family);
       modelEngineRef.current = engine;
+      modelEngineFamilyRef.current = selectedModel.family;
       const session = await engine.load({
         modelId: selectedModel.id,
         onProgress: (progress: unknown) => handleModelProgress(progress, "loading"),
       });
       modelSessionRef.current = session;
       loadedModelIdRef.current = selectedModel.id;
+      loadedModelFamilyRef.current = selectedModel.family;
       setModelRun((current) => ({
         ...current,
         status: "ready",
@@ -710,7 +797,7 @@ export function LocalAgentApp({
       }));
       addEvent({
         title: "Local model loaded",
-        detail: `${selectedModel.id} loaded through WebLLM. No chat route, localhost bridge, or cloud fallback was used by the UI.`,
+        detail: `${selectedModel.id} loaded through ${selectedModel.family}. No chat route, localhost bridge, or cloud fallback was used by the UI.`,
         status: "complete",
       });
       return session;
@@ -728,18 +815,20 @@ export function LocalAgentApp({
       });
       throw error;
     }
-  }, [addEvent, handleModelProgress, selectedWebLlmModelId]);
+  }, [addEvent, handleModelProgress, mobileFallbackModel, selectedWebLlmModelId]);
 
   const answerWithLocalModel = useCallback(
     async (userPrompt: string, localContext?: string) => {
-      const selectedModel = getWebLlmBrowserModel(selectedWebLlmModelId);
-      const engine = modelEngineRef.current ?? (await resolveLocalModelEngine());
+      const engine = modelEngineFamilyRef.current === selectedModel.family && modelEngineRef.current
+        ? modelEngineRef.current
+        : await resolveLocalModelEngine(selectedModel.family);
       modelEngineRef.current = engine;
-      const needsReload = loadedModelIdRef.current !== selectedModel.id;
+      modelEngineFamilyRef.current = selectedModel.family;
+      const needsReload = loadedModelIdRef.current !== selectedModel.id || loadedModelFamilyRef.current !== selectedModel.family;
       if (needsReload) {
         modelSessionRef.current = null;
       }
-      const session = modelSessionRef.current ?? (await handleLoadModel(selectedModel.id));
+      const session = modelSessionRef.current ?? (await handleLoadModel(selectedModel.id, selectedModel.family));
 
       setModelRun((current) => ({
         ...current,
@@ -773,7 +862,7 @@ export function LocalAgentApp({
         status: "complete",
       });
     },
-    [addEvent, appendChatMessage, handleLoadModel, handleModelProgress, selectedWebLlmModelId]
+    [addEvent, appendChatMessage, handleLoadModel, handleModelProgress, selectedModel]
   );
 
   const handleSubmitPrompt = useCallback(async () => {
@@ -854,6 +943,8 @@ export function LocalAgentApp({
   const handleClearLocalModelStorage = useCallback(async () => {
     modelSessionRef.current = null;
     loadedModelIdRef.current = null;
+    loadedModelFamilyRef.current = null;
+    modelEngineFamilyRef.current = null;
     setModelRun({
       status: "idle",
       message: "Local model storage was reset. Choose a model and click Download selected model again to chat.",
@@ -900,13 +991,12 @@ export function LocalAgentApp({
     [onReviewSecretOperation, readPath, writePath]
   );
 
-  const selectedWebLlmModel = getWebLlmBrowserModel(selectedWebLlmModelId);
   const modelBusy = modelRun.status === "loading" || modelRun.status === "generating";
-  const modelReady = modelRun.status === "ready" && loadedModelIdRef.current === selectedWebLlmModel.id;
+  const modelReady = modelRun.status === "ready" && loadedModelIdRef.current === selectedModel.id;
   const pendingApprovalEvents = workbench.events.filter((event) => event.approvalRequired).slice(0, 3);
   const handleInstallSelectedModel = useCallback(async () => {
-    await handleLoadModel(selectedWebLlmModel.id);
-  }, [handleLoadModel, selectedWebLlmModel.id]);
+    await handleLoadModel(selectedModel.id, selectedModel.family);
+  }, [handleLoadModel, selectedModel]);
 
   return (
     <div
@@ -954,10 +1044,28 @@ export function LocalAgentApp({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9a7240]">Select browser model</div>
-                  <div className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[#171615]">{selectedWebLlmModel.shortLabel}</div>
+                  <div className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[#171615]">{selectedModel.shortLabel}</div>
                   <p className="mt-1 text-sm leading-relaxed text-[#67615a]">WebLLM 모델을 고르고 브라우저 캐시에 다운로드한 뒤 이 탭에서 바로 채팅합니다.</p>
                 </div>
-                <span className="rounded-full bg-[#f2eadf] px-2.5 py-1 text-[11px] font-semibold text-[#8a6332]">{selectedWebLlmModel.speedLabel}</span>
+                <span className="rounded-full bg-[#f2eadf] px-2.5 py-1 text-[11px] font-semibold text-[#8a6332]">{selectedModel.speedLabel}</span>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[#eadcc8] bg-[#fffaf1] p-3 text-xs leading-relaxed text-[#5f574f]">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-bold uppercase tracking-[0.14em] text-[#9a7240]">Current device</div>
+                    <p className="mt-1 font-semibold text-[#211f1b]">{runtimeProfile.recommendedLabel}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleCheckThisDevice().catch(() => undefined)}
+                    className="shrink-0 rounded-xl border border-[#d8c7ad] bg-white px-3 py-1.5 text-[11px] font-bold text-[#5e4a2d] transition hover:bg-[#fff7e6]"
+                  >
+                    Check this device
+                  </button>
+                </div>
+                <p className="mt-2">{runtimeProfile.reason}</p>
+                <p className="mt-2 font-semibold text-[#7a5830]">Mobile fallback uses SmolLM2 135M on CPU/WASM when phones or failed WebGPU adapters need the safe path.</p>
               </div>
 
               <div className="mt-4 grid gap-2">
@@ -997,7 +1105,7 @@ export function LocalAgentApp({
                 className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-[#171615] px-4 py-3 text-[15px] font-semibold text-white transition hover:bg-[#2a2824] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-4 w-4" />
-                {modelReady ? `${selectedWebLlmModel.shortLabel} ready` : modelBusy ? "Downloading / loading..." : "Download selected model"}
+                {modelReady ? `${selectedModel.shortLabel} ready` : modelBusy ? "Downloading / loading..." : "Download selected model"}
               </button>
               <button
                 type="button"
@@ -1072,7 +1180,7 @@ export function LocalAgentApp({
                   <div className="min-w-0">
                     <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9a7240]">One click setup</div>
                     <div className="mt-1 text-base font-semibold text-[#171615]">Download selected model, then chat.</div>
-                    <p className="mt-1 text-sm leading-relaxed text-[#67615a]">선택 모델: {selectedWebLlmModel.shortLabel}. 다운로드가 끝나면 상태가 Ready로 바뀝니다.</p>
+                    <p className="mt-1 text-sm leading-relaxed text-[#67615a]">선택 모델: {selectedModel.shortLabel}. 다운로드가 끝나면 상태가 Ready로 바뀝니다.</p>
                   </div>
                   <button
                     type="button"

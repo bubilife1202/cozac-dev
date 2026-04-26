@@ -26,3 +26,12 @@ test("keeps the chat-first flow explicit in the Local LLM surface", () => {
   assert.match(localAiAppSource, /Enter 전송/);
   assert.match(localAiAppSource, /cloud fallback 없음/);
 });
+
+test("checks each visitor device and exposes a mobile CPU fallback path", () => {
+  assert.match(localAiAppSource, /Check this device/);
+  assert.match(localAiAppSource, /requestAdapter/);
+  assert.match(localAiAppSource, /Mobile fallback/);
+  assert.match(localAiAppSource, /SmolLM2 135M/);
+  assert.match(localAiAppSource, /CPU\/WASM/);
+  assert.match(localAiAppSource, /resolveLocalModelEngine\(selectedModel\.family\)/);
+});

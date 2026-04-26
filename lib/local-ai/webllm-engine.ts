@@ -6,6 +6,7 @@ export const WEBLLM_DEFAULT_MODEL_DETAIL =
   "WebLLM prebuilt q4f32 model: no fp16 shader requirement, downloads into browser cache, then answers inside the tab." as const;
 
 export type WebLlmBrowserModel = {
+  family: "webllm";
   id: string;
   label: string;
   shortLabel: string;
@@ -16,6 +17,7 @@ export type WebLlmBrowserModel = {
 
 export const WEBLLM_BROWSER_MODELS: WebLlmBrowserModel[] = [
   {
+    family: "webllm",
     id: WEBLLM_DEFAULT_MODEL_ID,
     label: WEBLLM_DEFAULT_MODEL_LABEL,
     shortLabel: "Qwen2.5 0.5B",
@@ -24,6 +26,7 @@ export const WEBLLM_BROWSER_MODELS: WebLlmBrowserModel[] = [
     description: "가장 빠른 첫 다운로드용 기본 모델. q4f32라 브라우저 호환성이 좋습니다.",
   },
   {
+    family: "webllm",
     id: "SmolLM2-360M-Instruct-q4f32_1-MLC",
     label: "WebLLM SmolLM2 360M Instruct (q4f32)",
     shortLabel: "SmolLM2 360M",
@@ -32,6 +35,7 @@ export const WEBLLM_BROWSER_MODELS: WebLlmBrowserModel[] = [
     description: "가벼운 테스트와 저사양 브라우저용 초소형 모델입니다.",
   },
   {
+    family: "webllm",
     id: "TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC",
     label: "WebLLM TinyLlama 1.1B Chat (q4f32)",
     shortLabel: "TinyLlama 1.1B",
@@ -40,6 +44,7 @@ export const WEBLLM_BROWSER_MODELS: WebLlmBrowserModel[] = [
     description: "작지만 대화형 응답 느낌을 보기 좋은 경량 모델입니다.",
   },
   {
+    family: "webllm",
     id: "Llama-3.2-1B-Instruct-q4f32_1-MLC",
     label: "WebLLM Llama 3.2 1B Instruct (q4f32)",
     shortLabel: "Llama 3.2 1B",
@@ -48,6 +53,7 @@ export const WEBLLM_BROWSER_MODELS: WebLlmBrowserModel[] = [
     description: "브라우저에서 시도하기 좋은 범용 1B급 모델입니다.",
   },
   {
+    family: "webllm",
     id: "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
     label: "WebLLM Qwen2.5 1.5B Instruct (q4f32)",
     shortLabel: "Qwen2.5 1.5B",
@@ -56,6 +62,7 @@ export const WEBLLM_BROWSER_MODELS: WebLlmBrowserModel[] = [
     description: "조금 더 나은 답변 품질을 노리는 데스크톱용 선택지입니다.",
   },
   {
+    family: "webllm",
     id: "Phi-3.5-mini-instruct-q4f32_1-MLC",
     label: "WebLLM Phi 3.5 Mini Instruct (q4f32)",
     shortLabel: "Phi 3.5 Mini",

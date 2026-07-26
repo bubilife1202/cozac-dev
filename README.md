@@ -1,49 +1,59 @@
-# [alanagoyal.com](https://alanagoyal.com)
+# [cozac.dev](https://cozac.dev)
 
-i'm obsessed with re-creating apple products. this is a macos-inspired personal website featuring a full desktop environment with multiple apps.
+jinbae park's personal site, built as a macos desktop you can actually use. every app is a real app: the notes are the writing, the messages app is how you ask me things, the finder browses my repos.
 
 ## features
 
 ### desktop environment
 
-a macos sierra 10.12 themed desktop with:
+a macos-themed desktop with:
 - **window management**: draggable, resizable windows with minimize, maximize, and close
-- **dock**: app launcher with hover tooltips
-- **menu bar**: functional apple menu, file menu, app menu, and status menus (wifi, bluetooth, control center)
+- **dock**: magnifying icon row with launch bounce and hover tooltips
+- **menu bar**: apple menu, file menu, app menu, and status menus (wifi, bluetooth, control center)
+- **spotlight**: ⌘space searches apps and public notes with keyboard navigation
 - **system states**: lock screen, sleep mode, restart, and shutdown overlays
 
 ### apps
 
-**notes** - apple notes clone for my personal website content
+**messages** - imessage clone, and the main way to ask about my work
+- the `cozac` conversation answers questions about my experience and projects
+- answers stream in from google's hosted `gemma-4-26b-a4b-it`, grounded in a
+  verified portfolio knowledge base — no browser model download, no wait
+- questions the portfolio cannot support are declined instead of guessed at,
+  and the sources behind each answer link to the note they came from
+- other ai contacts have their own personalities (via braintrust)
+- reactions, sound effects, typing indicators, group chats, @mentions
+- command menu (⌘K), pinned conversations, swipe gestures
+- focus mode integration (mutes notifications)
+
+**notes** - apple notes clone holding the site's written content
 - public notes viewable by everyone, private notes per browser session
 - github flavored markdown with interactive task lists
 - image paste/upload support
 - swipe gestures on mobile
 
-**messages** - imessage clone with ai-powered conversations
-- chat with ai contacts that have unique personalities (powered by gpt)
-- message reactions and sound effects
-- typing indicators and read/unread states
-- group chats and one-on-one conversations
-- pinned conversations and swipe gestures
-- @mentions and contact management
-- command menu (⌘K) with keyboard shortcuts
-- focus mode integration (mutes notifications)
+**lobby** - a private message box, not a public feed
+- pick a topic, start as a guest, send a note only i can read
+- no message list, no public timeline: the database revokes read access from
+  every client role
+
+**finder** - file browser
+- sidebar navigation (recents, applications, desktop, documents, downloads, projects)
+- browse local files and github repositories
+- quick look panel for images, pdfs, and text
+- launch apps from applications folder
+
+**music** - apple music clone
+- library, playlists, and charts
+- playback through the youtube iframe player
 
 **iterm** - terminal emulator
 - real file system navigation
 - github integration (browse your repos)
 - basic shell commands (ls, cd, cat, pwd, clear, etc.)
 
-**finder** - file browser
-- sidebar navigation (recents, applications, desktop, documents, downloads, projects)
-- browse local files and github repositories
-- launch apps from applications folder
-
 **calendar** - apple calendar clone
 - day, week, month, and year views with smooth navigation
-- sample events: exercise, focus time, meetings, dinners
-- date night saturdays cycling through sf restaurants
 - create, edit, and delete your own events
 - drag-to-create events in day/week views
 - holidays automatically displayed
@@ -63,10 +73,12 @@ a macos sierra 10.12 themed desktop with:
 - airdrop and focus mode toggles
 - about this mac
 
+**eggbrawl / eggcastle** - my games, opened in a new tab from the dock
+
 ### mobile
 
-responsive mobile interface with:
-- swipe gestures for navigation
+an ios-style home screen rather than a shrunken desktop:
+- spring-animated app open/close with a rubber-band dismiss gesture
 - touch-optimized controls
 - full app functionality
 
@@ -74,16 +86,37 @@ responsive mobile interface with:
 
 ### architecture
 
-the app uses next.js app router with a route group for the desktop environment. on desktop screens, all apps render in windows on a shared desktop. on mobile, apps display fullscreen with navigation.
+next.js app router with a route group for the desktop environment. on desktop
+screens, all apps render in windows on a shared desktop. on mobile, apps
+display fullscreen over an ios home screen.
+
+**portfolio chat** (`/api/portfolio-chat`) is the only server-side ai path that
+matters for visitors:
+- `lib/local-ai/portfolio-knowledge.ts` holds the verified facts and retrieves
+  the entries relevant to a question
+- the retrieved evidence goes into the system prompt; the model is told not to
+  infer anything outside it
+- a question with no supporting evidence is declined before any provider call,
+  so unanswerable questions cost nothing
+- the response streams as newline-delimited json so the typing indicator
+  reflects real generation
+- requests are length-limited, time-limited, and rate-limited per visitor in a
+  window shared by every server instance (`lib/rate-limit.ts`)
 
 **notes** use a session-based architecture:
 - **public notes**: managed by the site owner, visible to everyone
-- **private notes**: each browser session gets a unique id (stored in localstorage) linking to notes you create
+- **private notes**: each browser session gets a unique id (stored in
+  localstorage) linking to notes you create
 
-**messages** are client-side only:
+**messages** are otherwise client-side only:
 - conversations stored in localstorage
-- ai responses generated via braintrust proxy (openai-compatible)
+- other ai contacts respond via the braintrust proxy (openai-compatible)
 - no server-side message storage
+
+**lobby** is write-only by design. `supabase/migrations/20260724000000_private_lobby.sql`
+revokes select on `messages` and `profiles` from `anon` and `authenticated`,
+leaves insert for signed-in guests, and drops both tables from the realtime
+publication. only the service role can read what visitors send.
 
 **photos** use supabase storage:
 - images stored in supabase storage bucket
@@ -94,14 +127,16 @@ the app uses next.js app router with a route group for the desktop environment. 
 the app is built with:
 - **next.js** with app router
 - **typescript** for type safety
-- **supabase** for notes database
-- **braintrust** for ai chat responses (openai-compatible proxy)
+- **supabase** for notes, photos, lobby, and rate limiting
+- **google gemma 4** for the portfolio conversation
+- **braintrust** for the other ai chat responses (openai-compatible proxy)
 - **react-markdown** with github flavored markdown
 - **tailwind css** for styling
 
 ### backend
 
-the app uses [supabase](https://supabase.com) for the postgresql database with row-level security policies to control access to public and private notes.
+the app uses [supabase](https://supabase.com) for the postgresql database with
+row-level security policies to control access.
 
 **database schema**:
 
@@ -118,7 +153,8 @@ the `notes` table stores all notes with these fields:
 
 ### caching
 
-public notes are cached for 24 hours using next.js isr. private notes are always real-time.
+public notes are cached for 24 hours using next.js isr. private notes are
+always real-time.
 
 **to manually revalidate public notes**:
 
@@ -126,13 +162,13 @@ set `REVALIDATE_TOKEN` in environment variables, then:
 
 ```bash
 # revalidate sidebar (when adding/removing public notes)
-curl -X POST "https://yourdomain.com/notes/revalidate" \
+curl -X POST "https://cozac.dev/notes/revalidate" \
   -H "Content-Type: application/json" \
   -H "x-revalidate-token: your-token" \
   -d '{"layout": true}'
 
 # revalidate specific note (when updating content)
-curl -X POST "https://yourdomain.com/notes/revalidate" \
+curl -X POST "https://cozac.dev/notes/revalidate" \
   -H "Content-Type: application/json" \
   -H "x-revalidate-token: your-token" \
   -d '{"slug": "note-slug"}'
@@ -153,42 +189,50 @@ upload photos directly from your iphone using the share sheet:
    - **encode** with base64
    - **format date** → iso 8601
    - **get contents of url**:
-     - url: `https://yourdomain.com/api/photos/upload`
+     - url: `https://cozac.dev/api/photos/upload`
      - method: POST
      - headers: `x-api-key: <your-PHOTOS_UPLOAD_API_KEY>`
      - body: json `{ "image": [base64], "timestamp": [formatted date] }`
 3. name it "add to website"
 4. enable "show in share sheet" for images
 
-when you share a photo, the shortcut uploads it to supabase storage and ai automatically categorizes it into collections (flowers, food, friends).
+when you share a photo, the shortcut uploads it to supabase storage and ai
+automatically categorizes it into collections (flowers, food, friends).
 
-## clone the repo
+## running it yourself
 
-`git clone https://github.com/alanagoyal/alanagoyal`
+### clone the repo
 
-## set up the database
+`git clone https://github.com/bubilife1202/cozac-dev`
 
-this project uses [supabase](https://supabase.com) as a backend. to set up the database:
+### set up the database
+
+this project uses [supabase](https://supabase.com) as a backend:
 
 1. create a [new project](https://database.new) and enter your project details
 2. wait for the database to launch
-3. navigate to the sql editor in the dashboard
-4. paste the sql from the [migration file](https://github.com/alanagoyal/alanagoyal/blob/main/supabase/migrations/20240710180237_initial.sql) into the sql editor and press run
+3. run the migrations:
 
-alternatively, use the supabase cli to run migrations locally:
 ```bash
 supabase db push
 ```
 
-grab the project url and anon key from the api settings and put them in a new `.env.local` file in the root directory:
+migrations are append-only. an applied migration is never edited in place —
+correcting one means adding a new migration that moves the schema forward.
+
+grab the project url and anon key from the api settings and put them in a new
+`.env.local` file in the root directory:
 
 ```
-# supabase (required for notes and photos)
+# supabase (required for notes, photos, lobby, rate limiting)
 NEXT_PUBLIC_SUPABASE_URL="<your-supabase-url>"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="<your-anon-key>"
 SUPABASE_SERVICE_ROLE_KEY="<your-service-role-key>"
 
-# braintrust (required for messages ai)
+# google ai studio (required for the cozac portfolio conversation)
+GEMINI_API_KEY="<your-gemini-api-key>"
+
+# braintrust (required for the other messages ai contacts)
 BRAINTRUST_API_KEY="<your-braintrust-api-key>"
 
 # photos upload (required for ios shortcut)
@@ -200,42 +244,38 @@ NEXT_PUBLIC_SITE_URL="https://yourdomain.com"
 REVALIDATE_TOKEN="<your-revalidate-token>"
 NEXT_PUBLIC_REVALIDATE_TOKEN="<your-revalidate-token>"
 
-# lobby activity feed (optional)
-LOBBY_ACTIVITY_WEBHOOK_SECRET="<generate-random-secret>"
-LOBBY_ACTIVITY_PROFILE_ID="<optional-profile-uuid>"
+# github (optional - helps avoid rate limits for iterm/finder)
+GITHUB_TOKEN="<your-github-token>"
 ```
 
 **notes:**
-- `GITHUB_TOKEN` is optional but helps avoid rate limits when using iterm/finder github integration
-- `SUPABASE_SERVICE_ROLE_KEY` is needed for photo uploads (bypasses RLS)
+- `GEMINI_API_KEY` must never carry a `NEXT_PUBLIC_` prefix — it is read only
+  on the server and sent to google in the `x-goog-api-key` header
+- `SUPABASE_SERVICE_ROLE_KEY` is needed for photo uploads and the shared rate
+  limit counter (both bypass RLS)
 - `OPENAI_API_KEY` is used for ai photo categorization
-- `LOBBY_ACTIVITY_PROFILE_ID` is optional. If omitted, the oldest profile in `public.profiles` is used for activity posts.
+- `GITHUB_TOKEN` is optional but helps avoid rate limits in the iterm/finder
+  github integration
 
-## install dependencies
+### install dependencies
 
 `npm install`
 
-## run the app
+### run the app
 
-run the application in the command line and it will be available at http://localhost:3000.
+`npm run dev` — available at http://localhost:3000.
 
-`npm run dev`
+### checks
 
-## deploy
+```bash
+npm run check   # lint + typecheck + build
+npm test        # portfolio chat and storage unit tests
+npm run verify:local-ai   # asserts no visitor-side model download crept back in
+```
+
+### deploy
 
 deploy using [vercel](https://vercel.com)
-
-## github webhook for lobby activity feed
-
-to stream GitHub push activity into Lobby `#activity`:
-
-1. set `LOBBY_ACTIVITY_WEBHOOK_SECRET` in your environment
-2. in GitHub repo settings, create a webhook:
-   - payload URL: `https://yourdomain.com/api/lobby/activity`
-   - content type: `application/json`
-   - secret: same value as `LOBBY_ACTIVITY_WEBHOOK_SECRET`
-   - events: **Just the push event**
-3. push a commit and verify a new message appears in Lobby `#activity`
 
 ## markdown syntax for notes
 
@@ -361,4 +401,6 @@ you can also manually add images:
 
 ## license
 
-licensed under the [mit license](https://github.com/alanagoyal/alanagoyal/blob/main/LICENSE.md).
+licensed under the [mit license](LICENSE.md).
+
+forked from [alanagoyal/alanagoyal](https://github.com/alanagoyal/alanagoyal), whose macos desktop shell this is built on.

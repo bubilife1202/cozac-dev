@@ -34,12 +34,12 @@ export const metadata: Metadata = {
   ],
   creator: "Jinbae Park",
   publisher: "cozac.dev",
-  icons: {
-    icon: "/local-ai.svg",
-  },
+  // The favicon comes from app/icon.svg; declaring it here as well would
+  // override the file convention.
   openGraph: {
     type: "website",
-    locale: "en_US",
+    locale: "ko_KR",
+    alternateLocale: ["en_US"],
     url: siteConfig.url,
     title: "jinbae park - cozac.dev",
     description:

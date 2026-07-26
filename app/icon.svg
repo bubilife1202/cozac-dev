@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cozacMark" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="0.55" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#cozacMark)"/>
+  <path
+    d="M344 190c-22-25-52-40-88-40-62 0-110 47-110 106s48 106 110 106c36 0 66-15 88-40"
+    stroke="#F8FAFC"
+    stroke-width="52"
+    stroke-linecap="round"
+    fill="none"
+  />
+</svg>

@@ -21,6 +21,7 @@ interface AuthContextValue {
   loading: boolean;
   authError: string | null;
   signInWithLinkedIn: (options?: { nextPath?: string }) => Promise<AuthActionResult>;
+  signInAnonymously: () => Promise<AuthActionResult>;
   signOut: () => Promise<void>;
 }
 
@@ -170,9 +171,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, [supabase]);
 
+  const signInAnonymously = useCallback(async (): Promise<AuthActionResult> => {
+    if (!supabase) {
+      const message = "로그인이 잠시 비활성화되어 있어요.";
+      setAuthError(message);
+      return { error: message };
+    }
+
+    setAuthError(null);
+    const suffix = crypto.randomUUID().slice(0, 4).toUpperCase();
+    const { error } = await supabase.auth.signInAnonymously({
+      options: { data: { full_name: `Guest ${suffix}` } },
+    });
+
+    if (error) {
+      const message = "게스트 참여에 실패했어요. 잠시 후 다시 시도해 주세요.";
+      setAuthError(message);
+      return { error: message };
+    }
+
+    return { error: null };
+  }, [supabase]);
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, authError, signInWithLinkedIn, signOut }}
+      value={{ user, loading, authError, signInWithLinkedIn, signInAnonymously, signOut }}
     >
       {children}
     </AuthContext.Provider>

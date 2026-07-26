@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlaylistTrack } from "../types";
 import { useAudio } from "@/lib/music/audio-context";
-import { ExternalLink, Play, Pause } from "lucide-react";
+import { Play, Pause } from "lucide-react";
 import { formatDuration } from "@/lib/music/utils";
 
 interface SongsViewProps {
@@ -16,17 +16,8 @@ interface SongsViewProps {
 export function SongsView({ songs, isMobileView }: SongsViewProps) {
   const { playbackState, play, pause, resume } = useAudio();
 
-  const openExternalTrack = (track: PlaylistTrack) => {
-    if (typeof window !== "undefined" && track.externalUrl) {
-      window.open(track.externalUrl, "_blank", "noopener,noreferrer");
-    }
-  };
-
   const handleTrackPlay = (track: PlaylistTrack) => {
-    if (!track.previewUrl) {
-      openExternalTrack(track);
-      return;
-    }
+    if (!track.previewUrl && !track.externalUrl) return;
 
     if (playbackState.currentTrack?.id === track.id && playbackState.isPlaying) {
       pause();
@@ -79,12 +70,10 @@ export function SongsView({ songs, isMobileView }: SongsViewProps) {
                   >
                     {isPlaying ? (
                       <Pause className="w-4 h-4 mx-auto" />
-                    ) : !track.previewUrl ? (
-                      <ExternalLink className="w-4 h-4 mx-auto" />
                     ) : (
                       <span className="group-hover:hidden">{index + 1}</span>
                     )}
-                    {!isPlaying && track.previewUrl && (
+                    {!isPlaying && (
                       <Play className="w-4 h-4 mx-auto hidden group-hover:block" />
                     )}
                   </span>

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Playlist, PlaylistTrack } from "../types";
 import { useAudio } from "@/lib/music/audio-context";
-import { ExternalLink, Play, Pause, Shuffle } from "lucide-react";
+import { Play, Pause, Shuffle } from "lucide-react";
 import { formatDuration, formatTotalDuration } from "@/lib/music/utils";
 
 interface PlaylistViewProps {
@@ -16,17 +16,8 @@ interface PlaylistViewProps {
 export function PlaylistView({ playlist, isMobileView }: PlaylistViewProps) {
   const { playbackState, play, pause, resume, toggleShuffle } = useAudio();
 
-  const openExternalTrack = (track: PlaylistTrack) => {
-    if (typeof window !== "undefined" && track.externalUrl) {
-      window.open(track.externalUrl, "_blank", "noopener,noreferrer");
-    }
-  };
-
   const handleTrackPlay = (track: PlaylistTrack) => {
-    if (!track.previewUrl) {
-      openExternalTrack(track);
-      return;
-    }
+    if (!track.previewUrl && !track.externalUrl) return;
 
     if (playbackState.currentTrack?.id === track.id && playbackState.isPlaying) {
       pause();
@@ -46,7 +37,9 @@ export function PlaylistView({ playlist, isMobileView }: PlaylistViewProps) {
     if (isPlayingPlaylist) {
       pause();
     } else {
-      const firstPlayable = playlist.tracks.find((t) => t.previewUrl);
+      const firstPlayable = playlist.tracks.find(
+        (t) => t.previewUrl || t.externalUrl
+      );
       if (firstPlayable) {
         play(firstPlayable, playlist.tracks);
       }
@@ -58,7 +51,9 @@ export function PlaylistView({ playlist, isMobileView }: PlaylistViewProps) {
     if (!playbackState.isShuffle) {
       toggleShuffle();
     }
-    const firstPlayable = playlist.tracks.find((t) => t.previewUrl);
+    const firstPlayable = playlist.tracks.find(
+      (t) => t.previewUrl || t.externalUrl
+    );
     if (firstPlayable) {
       // Small delay to let shuffle state update
       setTimeout(() => {
@@ -175,12 +170,10 @@ export function PlaylistView({ playlist, isMobileView }: PlaylistViewProps) {
                   >
                     {isPlaying ? (
                       <Pause className="w-4 h-4 mx-auto" />
-                    ) : !track.previewUrl ? (
-                      <ExternalLink className="w-4 h-4 mx-auto" />
                     ) : (
                       <span className="group-hover:hidden">{index + 1}</span>
                     )}
-                    {!isPlaying && track.previewUrl && (
+                    {!isPlaying && (
                       <Play className="w-4 h-4 mx-auto hidden group-hover:block" />
                     )}
                   </span>

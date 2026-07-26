@@ -13,4 +13,5 @@ export interface AppConfig {
   showOnDockByDefault?: boolean; // defaults to true if not specified
   multiWindow?: boolean; // defaults to false - allows multiple windows per app
   cascadeOffset?: number; // offset for cascading new windows (default 30)
+  externalUrl?: string; // opens outside the desktop shell when present
 }

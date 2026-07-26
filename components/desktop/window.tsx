@@ -143,8 +143,10 @@ export function Window({ appId, children, onFocus, zIndexOverride }: WindowProps
       <div
         ref={innerWrapperRef}
         className={cn(
-          "absolute inset-0 bg-white dark:bg-zinc-900 overflow-hidden shadow-2xl border border-black/10 dark:border-white/10 flex flex-col",
-          isMaximized ? "rounded-none" : "rounded-xl",
+          "absolute inset-0 bg-white dark:bg-zinc-900 overflow-hidden border border-black/10 dark:border-white/10 flex flex-col",
+          isMaximized
+            ? "rounded-none shadow-2xl"
+            : "rounded-2xl shadow-[0_18px_50px_rgba(0,0,0,0.28)] dark:shadow-[0_18px_50px_rgba(0,0,0,0.55)]",
           !isFocused && "[&_*]:!cursor-default"
         )}
       >

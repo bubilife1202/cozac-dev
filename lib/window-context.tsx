@@ -200,7 +200,12 @@ function loadStateFromStorage(): WindowManagerState | null {
       // Validate structure
       if (parsed.windows && typeof parsed.nextZIndex === "number") {
         // Merge with current APPS config to pick up any new single-window apps
-        const mergedWindows: Record<string, WindowState> = { ...parsed.windows };
+        const validAppIds = new Set(APPS.map((app) => app.id));
+        const mergedWindows: Record<string, WindowState> = Object.fromEntries(
+          Object.entries(parsed.windows as Record<string, WindowState>).filter(
+            ([, windowState]) => validAppIds.has(windowState.appId),
+          ),
+        );
         APPS.forEach((app) => {
           // Only add default windows for single-window apps
           if (!app.multiWindow && !mergedWindows[app.id]) {
@@ -210,6 +215,10 @@ function loadStateFromStorage(): WindowManagerState | null {
         return {
           ...parsed,
           windows: mergedWindows,
+          focusedWindowId:
+            parsed.focusedWindowId && mergedWindows[parsed.focusedWindowId]
+              ? parsed.focusedWindowId
+              : null,
           // Ensure nextInstanceNumber exists (migration from old state)
           nextInstanceNumber: parsed.nextInstanceNumber || {},
         };
@@ -874,10 +883,6 @@ export function WindowManagerProvider({
    * - New visitor + no specific app → desktop default as-is
    */
   const computeInitialState = React.useCallback((): WindowManagerState => {
-    if (initialAppId === "local-ai") {
-      return withFocusedApp(getBaseState(), initialAppId);
-    }
-
     const savedState = loadStateFromStorage();
 
     if (savedState) {

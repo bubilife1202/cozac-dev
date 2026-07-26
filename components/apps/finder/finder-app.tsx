@@ -7,8 +7,9 @@ import { useRecents } from "@/lib/recents-context";
 import { cn } from "@/lib/utils";
 import { WindowControls } from "@/components/window-controls";
 import { APPS } from "@/lib/app-config";
-import { getFileModifiedDate } from "@/lib/file-storage";
+import { getFileModifiedDate, getTextEditContent } from "@/lib/file-storage";
 import { loadFinderPath, saveFinderPath } from "@/lib/sidebar-persistence";
+import { QuickLookPanel } from "./quick-look-panel";
 
 const USERNAME = "jinbae";
 const HOME_DIR = `/Users/${USERNAME}`;
@@ -162,6 +163,58 @@ async function fetchGitHubRecentFiles(signal?: AbortSignal): Promise<GitHubRecen
   return data.files;
 }
 
+// Resolve the URL/type the Preview app would use for a file (shared by double-click and Quick Look)
+function getPreviewOpenMetadata(file: FileItem): { fileUrl: string; fileType: "image" | "pdf" } | null {
+  if (!isPreviewFile(file.name)) return null;
+
+  // For GitHub files, construct the raw URL
+  if (file.path.startsWith(PROJECTS_DIR + "/")) {
+    const relativePath = file.path.slice(PROJECTS_DIR.length + 1);
+    const parts = relativePath.split("/");
+    const repo = parts[0];
+    const repoPath = parts.slice(1).join("/");
+    return {
+      fileUrl: `https://raw.githubusercontent.com/${USERNAME}/${repo}/main/${repoPath}`,
+      fileType: getPreviewFileType(file.name),
+    };
+  }
+
+  // For Documents files, serve from public/documents
+  if (file.path.startsWith(`${HOME_DIR}/Documents/`)) {
+    const fileName = file.path.slice(`${HOME_DIR}/Documents/`.length);
+    return {
+      fileUrl: `/documents/${encodeURIComponent(fileName)}`,
+      fileType: getPreviewFileType(file.name),
+    };
+  }
+
+  return null;
+}
+
+// Load text content the way TextEdit would receive it (cached edits take priority)
+async function loadTextFileContent(file: FileItem): Promise<string | null> {
+  const cached = getTextEditContent(file.path);
+  if (cached !== undefined) return cached;
+
+  if (file.path.startsWith(PROJECTS_DIR + "/")) {
+    const relativePath = file.path.slice(PROJECTS_DIR.length + 1);
+    const parts = relativePath.split("/");
+    const repo = parts[0];
+    const repoPath = parts.slice(1).join("/");
+    try {
+      return await fetchFileContent(repo, repoPath);
+    } catch {
+      return null;
+    }
+  }
+
+  if (file.path === `${HOME_DIR}/Desktop/hello.md`) {
+    return "hello world!";
+  }
+
+  return "";
+}
+
 // Icon component
 function FileIcon({ type, name, icon, className }: { type: "file" | "dir" | "app"; name: string; icon?: string; className?: string }) {
   // File type icons based on extension
@@ -307,6 +360,7 @@ export function FinderApp({ isMobile = false, inShell = false, onOpenApp, onOpen
   const [viewMode, setViewMode] = useState<"icons" | "list">("list");
   const [showViewDropdown, setShowViewDropdown] = useState(false);
   const [githubRecentFiles, setGithubRecentFiles] = useState<GitHubRecentFile[]>([]);
+  const [quickLookOpen, setQuickLookOpen] = useState(false);
 
   const inDesktopShell = !!(inShell && windowFocus);
 
@@ -526,6 +580,67 @@ export function FinderApp({ isMobile = false, inShell = false, onOpenApp, onOpen
     }
   }, [initialTab, getPathForSidebarItem]);
 
+  // Quick Look: close when the selection is cleared or moves to a non-file item
+  useEffect(() => {
+    if (!quickLookOpen) return;
+    const item = files.find((f) => f.path === selectedFile);
+    if (!item || item.type !== "file") {
+      setQuickLookOpen(false);
+    }
+  }, [quickLookOpen, selectedFile, files]);
+
+  // Quick Look keyboard shortcuts: Space toggles, Esc closes
+  useEffect(() => {
+    if (isMobile) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only when this Finder window is focused (in the desktop shell)
+      if (inDesktopShell && !windowFocus?.isFocused) return;
+
+      // Never trigger while typing (rename fields, search inputs, etc.)
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+
+      if (e.key === "Escape") {
+        if (quickLookOpen) {
+          e.preventDefault();
+          setQuickLookOpen(false);
+        }
+        return;
+      }
+
+      if (e.key !== " ") return;
+      // Leave modified shortcuts (e.g. Cmd+Space for Spotlight) to other handlers
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+
+      if (quickLookOpen) {
+        setQuickLookOpen(false);
+        return;
+      }
+
+      const item = files.find((f) => f.path === selectedFile);
+      if (!item || item.type !== "file") return;
+      // Don't preview files in trash (they don't exist)
+      if (item.path.startsWith("trash/")) return;
+      setQuickLookOpen(true);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMobile, inDesktopShell, windowFocus, quickLookOpen, selectedFile, files]);
+
+  // The file shown in Quick Look follows the current selection (like real macOS)
+  const quickLookFile = quickLookOpen
+    ? files.find((f) => f.path === selectedFile && f.type === "file" && !f.path.startsWith("trash/")) ?? null
+    : null;
+  const quickLookPreview = useMemo(
+    () => (quickLookFile ? getPreviewOpenMetadata(quickLookFile) : null),
+    [quickLookFile]
+  );
+
   // Handle sidebar selection
   const handleSidebarSelect = useCallback((item: SidebarItem) => {
     setSelectedSidebar(item);
@@ -567,40 +682,17 @@ export function FinderApp({ isMobile = false, inShell = false, onOpenApp, onOpen
       // Add to recents when viewing a file
       addRecent({ path: file.path, name: file.name, type: file.type });
 
-      // Check if it's a preview file (image or PDF)
+      // Images and PDFs open in Preview
       if (isPreviewFile(file.name) && onOpenPreviewFile) {
-        // For GitHub files, construct the raw URL
-        if (file.path.startsWith(PROJECTS_DIR + "/")) {
-          const relativePath = file.path.slice(PROJECTS_DIR.length + 1);
-          const parts = relativePath.split("/");
-          const repo = parts[0];
-          const repoPath = parts.slice(1).join("/");
-          const fileUrl = `https://raw.githubusercontent.com/${USERNAME}/${repo}/main/${repoPath}`;
-          onOpenPreviewFile(file.path, fileUrl, getPreviewFileType(file.name));
-        } else if (file.path.startsWith(`${HOME_DIR}/Documents/`)) {
-          // For Documents files, serve from public/documents
-          const fileName = file.path.slice(`${HOME_DIR}/Documents/`.length);
-          const fileUrl = `/documents/${encodeURIComponent(fileName)}`;
-          onOpenPreviewFile(file.path, fileUrl, getPreviewFileType(file.name));
+        const previewMeta = getPreviewOpenMetadata(file);
+        if (previewMeta) {
+          onOpenPreviewFile(file.path, previewMeta.fileUrl, previewMeta.fileType);
         }
         return;
       }
 
-      // Get file content for text files
-      let content: string | null = "";
-      if (file.path.startsWith(PROJECTS_DIR + "/")) {
-        const relativePath = file.path.slice(PROJECTS_DIR.length + 1);
-        const parts = relativePath.split("/");
-        const repo = parts[0];
-        const filePath = parts.slice(1).join("/");
-        try {
-          content = await fetchFileContent(repo, filePath);
-        } catch {
-          content = null;
-        }
-      } else if (file.path === `${HOME_DIR}/Desktop/hello.md`) {
-        content = "hello world!";
-      }
+      // Get file content for text files (cached TextEdit edits take priority)
+      const content = await loadTextFileContent(file);
 
       // Handle file not found (shouldn't happen after tree verification, but just in case)
       if (content === null) {
@@ -1224,7 +1316,7 @@ export function FinderApp({ isMobile = false, inShell = false, onOpenApp, onOpen
   return (
     <div
       ref={containerRef}
-      className="flex flex-col h-full bg-white dark:bg-zinc-900"
+      className="relative flex flex-col h-full bg-white dark:bg-zinc-900"
       data-app="finder"
     >
       {renderNav()}
@@ -1257,6 +1349,15 @@ export function FinderApp({ isMobile = false, inShell = false, onOpenApp, onOpen
           )}
         </div>
       </div>
+      {quickLookFile && (
+        <QuickLookPanel
+          file={quickLookFile}
+          preview={quickLookPreview}
+          loadTextContent={loadTextFileContent}
+          getKind={getFileKind}
+          onClose={() => setQuickLookOpen(false)}
+        />
+      )}
     </div>
   );
 }

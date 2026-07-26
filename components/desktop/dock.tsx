@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { APPS, getAppById } from "@/lib/app-config";
 import { useWindowManager } from "@/lib/window-context";
 import { cn } from "@/lib/utils";
@@ -47,6 +47,10 @@ function DockTooltip({ label }: { label: string }) {
 // Animation states for dock icons
 type AnimationState = "entering" | "exiting" | "stable";
 
+const ICON_BASE_SIZE = 48;
+const MAGNIFICATION_MAX_SCALE = 1.85;
+const MAGNIFICATION_RANGE = 110;
+
 // Get default dock apps (those that should show by default)
 const getDefaultDockApps = () => {
   return APPS.filter((app) => app.showOnDockByDefault !== false).map((app) => app.id);
@@ -62,6 +66,58 @@ export function Dock({ onTrashClick, onFinderClick }: DockProps) {
     bringAppToFront,
   } = useWindowManager();
   const [hoveredApp, setHoveredApp] = useState<string | null>(null);
+  const [bouncingApps, setBouncingApps] = useState<Set<string>>(new Set());
+  const iconBoxRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const applyMagnification = useCallback((mouseX: number | null) => {
+    iconBoxRefs.current.forEach((box) => {
+      let scale = 1;
+      if (mouseX !== null) {
+        const rect = box.getBoundingClientRect();
+        const center = rect.left + rect.width / 2;
+        const distance = Math.abs(mouseX - center);
+        if (distance < MAGNIFICATION_RANGE) {
+          scale =
+            1 +
+            (MAGNIFICATION_MAX_SCALE - 1) *
+              Math.cos((distance / MAGNIFICATION_RANGE) * (Math.PI / 2));
+        }
+      }
+      const px = ICON_BASE_SIZE * scale;
+      box.style.width = `${px}px`;
+      box.style.height = `${px}px`;
+      const content = box.firstElementChild as HTMLElement | null;
+      if (content) {
+        content.style.transform = `scale(${scale})`;
+      }
+    });
+  }, []);
+
+  const registerIconBox = useCallback(
+    (id: string) => (el: HTMLDivElement | null) => {
+      if (el) {
+        iconBoxRefs.current.set(id, el);
+      } else {
+        iconBoxRefs.current.delete(id);
+      }
+    },
+    []
+  );
+
+  const triggerBounce = useCallback((appId: string) => {
+    setBouncingApps((prev) => {
+      const next = new Set(prev);
+      next.add(appId);
+      return next;
+    });
+    setTimeout(() => {
+      setBouncingApps((prev) => {
+        const next = new Set(prev);
+        next.delete(appId);
+        return next;
+      });
+    }, 1100);
+  }, []);
 
   // Track which apps are visible and their animation states
   // Initialize with default dock apps so they don't animate on page load
@@ -217,11 +273,17 @@ export function Dock({ onTrashClick, onFinderClick }: DockProps) {
   const handleAppClick = (appId: string) => {
     // Special handling for Finder to reset tab to recents
     if (appId === "finder" && onFinderClick) {
+      triggerBounce(appId);
       onFinderClick();
       return;
     }
 
     const app = getAppById(appId);
+    if (app?.externalUrl) {
+      triggerBounce(appId);
+      window.open(app.externalUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
 
     // For multi-window apps, bring all windows to front
     if (app?.multiWindow) {
@@ -236,11 +298,13 @@ export function Dock({ onTrashClick, onFinderClick }: DockProps) {
     const windowState = getWindow(appId);
     if (windowState?.isOpen) {
       if (windowState.isMinimized) {
+        triggerBounce(appId);
         unminimizeWindow(appId);
       } else {
         focusWindow(appId);
       }
     } else {
+      triggerBounce(appId);
       openWindow(appId);
     }
 
@@ -251,6 +315,7 @@ export function Dock({ onTrashClick, onFinderClick }: DockProps) {
 
   const handleTrashClick = () => {
     if (onTrashClick) {
+      triggerBounce("trash");
       onTrashClick();
     }
   };
@@ -266,7 +331,11 @@ export function Dock({ onTrashClick, onFinderClick }: DockProps) {
 
   return (
     <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[60]">
-      <div className="flex items-end gap-1 px-3 py-1.5 bg-white/30 dark:bg-black/30 backdrop-blur-2xl rounded-2xl border border-white/20 dark:border-white/10 shadow-lg transition-all duration-300 w-max">
+      <div
+        className="flex items-end gap-1 px-3 py-1.5 glass-dock rounded-[24px] w-max"
+        onMouseMove={(e) => applyMagnification(e.clientX)}
+        onMouseLeave={() => applyMagnification(null)}
+      >
         {appsToRender.map((app) => {
           const isOpen = hasOpenWindows(app.id);
           const animState = animationStates[app.id] || "stable";
@@ -278,27 +347,35 @@ export function Dock({ onTrashClick, onFinderClick }: DockProps) {
               onMouseEnter={() => setHoveredApp(app.id)}
               onMouseLeave={() => setHoveredApp(null)}
               className={cn(
-                "group relative flex flex-col items-center outline-none transition-all duration-300 flex-shrink-0",
+                "group relative flex flex-col items-center outline-none flex-shrink-0",
                 animState === "entering" && "animate-dock-enter",
-                animState === "exiting" && "animate-dock-exit",
-                animState === "stable" && "hover:scale-110 active:scale-95"
+                animState === "exiting" && "animate-dock-exit"
               )}
             >
               {hoveredApp === app.id && animState === "stable" && (
                 <DockTooltip label={app.name} />
               )}
-              <div className="w-12 h-12 relative flex items-center justify-center">
-                {app.id === "calendar" ? (
-                  <CalendarDockIcon size={38} />
-                ) : (
-                  <img
-                    src={app.icon}
-                    alt={app.name}
-                    width={48}
-                    height={48}
-                    className="rounded-xl shadow-md"
-                  />
+              <div
+                ref={registerIconBox(app.id)}
+                className={cn(
+                  "relative flex items-end justify-center transition-[width,height] duration-100 ease-out",
+                  bouncingApps.has(app.id) && "animate-dock-bounce"
                 )}
+                style={{ width: ICON_BASE_SIZE, height: ICON_BASE_SIZE }}
+              >
+                <div className="w-12 h-12 flex items-center justify-center origin-bottom transition-transform duration-100 ease-out">
+                  {app.id === "calendar" ? (
+                    <CalendarDockIcon size={38} />
+                  ) : (
+                    <img
+                      src={app.icon}
+                      alt={app.name}
+                      width={48}
+                      height={48}
+                      className="w-full h-full rounded-[24%] shadow-md"
+                    />
+                  )}
+                </div>
               </div>
               <div
                 className={cn(
@@ -320,16 +397,26 @@ export function Dock({ onTrashClick, onFinderClick }: DockProps) {
           onClick={handleTrashClick}
           onMouseEnter={() => setHoveredApp("trash")}
           onMouseLeave={() => setHoveredApp(null)}
-          className="group relative flex flex-col items-center transition-transform hover:scale-110 active:scale-95 outline-none flex-shrink-0"
+          className="group relative flex flex-col items-center outline-none flex-shrink-0"
         >
           {hoveredApp === "trash" && <DockTooltip label="Trash" />}
-          <div className="w-12 h-12 relative flex items-center justify-center">
-            <img
-              src="/trash.png"
-              alt="Trash"
-              width={48}
-              height={48}
-            />
+          <div
+            ref={registerIconBox("trash")}
+            className={cn(
+              "relative flex items-end justify-center transition-[width,height] duration-100 ease-out",
+              bouncingApps.has("trash") && "animate-dock-bounce"
+            )}
+            style={{ width: ICON_BASE_SIZE, height: ICON_BASE_SIZE }}
+          >
+            <div className="w-12 h-12 flex items-center justify-center origin-bottom transition-transform duration-100 ease-out">
+              <img
+                src="/trash.png"
+                alt="Trash"
+                width={48}
+                height={48}
+                className="w-full h-full"
+              />
+            </div>
           </div>
           {/* Trash doesn't show open indicator */}
           <div className="w-1 h-1 rounded-full mt-1 opacity-0" />

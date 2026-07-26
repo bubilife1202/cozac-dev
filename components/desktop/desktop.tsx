@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { WindowManagerProvider, useWindowManager, DESKTOP_DEFAULT_FOCUSED_APP, getAppIdFromWindowId } from "@/lib/window-context";
 import { useSystemSettings } from "@/lib/system-settings-context";
@@ -11,7 +11,7 @@ import { Dock } from "./dock";
 import { Window } from "./window";
 import { NotesApp } from "@/components/apps/notes/notes-app";
 import { MessagesApp } from "@/components/apps/messages/messages-app";
-import { LocalAiApp } from "@/components/apps/local-ai/local-ai-app";
+import { LobbyApp } from "@/components/apps/lobby/lobby-app";
 import { SettingsApp } from "@/components/apps/settings/settings-app";
 import { ITermApp } from "@/components/apps/iterm/iterm-app";
 import { FinderApp, type SidebarItem as FinderTab } from "@/components/apps/finder/finder-app";
@@ -26,17 +26,13 @@ import { LockScreen } from "./lock-screen";
 import { SleepOverlay } from "./sleep-overlay";
 import { ShutdownOverlay } from "./shutdown-overlay";
 import { RestartOverlay } from "./restart-overlay";
-import { BootSequence } from "./boot-sequence";
+import { Spotlight } from "./spotlight";
 import { getWallpaperPath } from "@/lib/os-versions";
+import { getAppById } from "@/lib/app-config";
 import type { SettingsPanel, SettingsCategory } from "@/components/apps/settings/settings-app";
 import { getTextEditContent, saveTextEditContent, cacheTextEditContent } from "@/lib/file-storage";
-import { useAuth } from "@/lib/auth-context";
 
 type DesktopMode = "active" | "locked" | "sleeping" | "shuttingDown" | "restarting";
-
-type StartupPhase = "boot" | "auth" | "ready";
-
-const BOOT_SEEN_KEY = "cozac.boot.seen.v1";
 
 interface DesktopProps {
   initialAppId?: string;
@@ -144,7 +140,6 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
   const { focusMode, currentOS } = useSystemSettings();
   const { touchRecent } = useRecents();
   const isMobile = useMobileDetect();
-  const { user, loading: authLoading } = useAuth();
 
   // Debounce touchRecent to avoid excessive re-renders
   const touchTimers = useRef<Record<string, NodeJS.Timeout>>({});
@@ -162,11 +157,12 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     return () => Object.values(timers).forEach(clearTimeout);
   }, []);
   const [mode, setMode] = useState<DesktopMode>(initialAppId ? "active" : "locked");
-  const [startupPhase, setStartupPhase] = useState<StartupPhase>("ready");
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel | undefined>(undefined);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory | undefined>(undefined);
   const [restoreDefaultOnUnlock, setRestoreDefaultOnUnlock] = useState(!initialAppId);
   const [finderTab, setFinderTab] = useState<FinderTab | undefined>(undefined);
+  const [spotlightOpen, setSpotlightOpen] = useState(false);
+  const [noteRequest, setNoteRequest] = useState<{ slug: string; nonce: number } | null>(null);
   // Get TextEdit and Preview windows from window manager
   const textEditWindows = getWindowsByApp("textedit");
   const previewWindows = getWindowsByApp("preview");
@@ -305,7 +301,7 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
 
   // Update URL when focus changes
   useEffect(() => {
-    if (mode !== "active" || startupPhase !== "ready") return;
+    if (mode !== "active") return;
 
     const focusedWindowId = state.focusedWindowId;
     if (!focusedWindowId) return;
@@ -334,7 +330,7 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     } else {
       window.history.replaceState(null, "", `/${focusedAppId}`);
     }
-  }, [mode, startupPhase, state.focusedWindowId, state.windows, initialNoteSlug]);
+  }, [mode, state.focusedWindowId, state.windows, initialNoteSlug]);
 
   const isActive = mode === "active";
 
@@ -408,6 +404,12 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
 
   // Handler for opening apps from Finder
   const handleOpenApp = useCallback((appId: string) => {
+    const app = getAppById(appId);
+    if (app?.externalUrl) {
+      window.open(app.externalUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
     const windowState = getWindow(appId);
     if (windowState?.isOpen) {
       if (windowState.isMinimized) {
@@ -428,6 +430,14 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
       window.history.replaceState(null, "", `/${appId}`);
     }
   }, [getWindow, restoreWindow, focusWindow, openWindow, initialNoteSlug]);
+
+  // Open a specific note from Spotlight: focus/open Notes like any other app,
+  // then remount NotesApp with the requested slug (NotesApp selects initialSlug on mount)
+  const handleOpenNoteFromSpotlight = useCallback((slug: string) => {
+    setNoteRequest((prev) => ({ slug, nonce: (prev?.nonce ?? 0) + 1 }));
+    handleOpenApp("notes");
+    window.history.replaceState(null, "", `/notes/${slug}`);
+  }, [handleOpenApp]);
 
   // Menu bar handlers
   const handleOpenSettings = useCallback(() => {
@@ -482,25 +492,26 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
     }
   }, [restoreDefaultOnUnlock, restoreDesktopDefault]);
 
-  useLayoutEffect(() => {
-    // Show the start screen immediately; boot/auth overlays made the first page feel stuck.
-    setStartupPhase("ready");
-  }, []);
-
+  // Global Spotlight shortcut: Cmd+Space / Ctrl+Space toggles, even while typing
+  // (like real Spotlight) - normal typing is never intercepted
   useEffect(() => {
-    if (startupPhase !== "auth") return;
-    if (authLoading) return;
+    if (!isActive) return;
 
-    if (user) {
-      setMode("active");
-      setStartupPhase("ready");
-      return;
-    }
+    const handleSpotlightShortcut = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.code === "Space" || e.key === " ")) {
+        e.preventDefault();
+        setSpotlightOpen((prev) => !prev);
+      }
+    };
 
-    setRestoreDefaultOnUnlock(!initialAppId);
-    setMode("locked");
-    setStartupPhase("ready");
-  }, [startupPhase, authLoading, user, initialAppId]);
+    document.addEventListener("keydown", handleSpotlightShortcut);
+    return () => document.removeEventListener("keydown", handleSpotlightShortcut);
+  }, [isActive]);
+
+  // Spotlight only lives on the active desktop - hide it when locked/sleeping
+  useEffect(() => {
+    if (!isActive) setSpotlightOpen(false);
+  }, [isActive]);
 
   return (
     <div className="fixed inset-0">
@@ -526,15 +537,19 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
       {isActive && (
         <>
           <Window appId="notes">
-            <NotesApp inShell={true} initialSlug={initialNoteSlug} />
+            <NotesApp
+              key={noteRequest ? `${noteRequest.slug}:${noteRequest.nonce}` : "default"}
+              inShell={true}
+              initialSlug={noteRequest?.slug ?? initialNoteSlug}
+            />
           </Window>
 
           <Window appId="messages">
             <MessagesApp inShell={true} focusModeActive={focusMode !== "off"} />
           </Window>
 
-          <Window appId="local-ai">
-            <LocalAiApp inShell={true} />
+          <Window appId="lobby">
+            <LobbyApp inShell={true} />
           </Window>
 
           <Window appId="settings">
@@ -631,38 +646,15 @@ function DesktopContent({ initialAppId, initialNoteSlug, initialTextEditFile, in
             onTrashClick={handleTrashClick}
             onFinderClick={handleFinderDockClick}
           />
+
+          {spotlightOpen && (
+            <Spotlight
+              onClose={() => setSpotlightOpen(false)}
+              onOpenApp={handleOpenApp}
+              onOpenNote={handleOpenNoteFromSpotlight}
+            />
+          )}
         </>
-      )}
-
-      {startupPhase === "boot" && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black">
-          <BootSequence
-            subtitle="starting community"
-            onComplete={() => {
-              try {
-                window.localStorage.setItem(BOOT_SEEN_KEY, "1");
-              } catch (error) {
-                void error;
-              }
-              setStartupPhase("auth");
-            }}
-          />
-        </div>
-      )}
-
-      {startupPhase === "auth" && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="flex gap-1.5" role="status" aria-live="polite">
-            <span className="sr-only">Initializing session</span>
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-2.5 h-2.5 rounded-full bg-white/80 animate-bounce"
-                style={{ animationDelay: `${i * 150}ms` }}
-              />
-            ))}
-          </div>
-        </div>
       )}
 
       {mode === "locked" && <LockScreen onUnlock={handleUnlock} />}

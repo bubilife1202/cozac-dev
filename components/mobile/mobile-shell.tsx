@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { RecentsProvider } from "@/lib/recents-context";
 import { NotesApp } from "@/components/apps/notes/notes-app";
 import { MessagesApp } from "@/components/apps/messages/messages-app";
-import { LocalAiApp } from "@/components/apps/local-ai/local-ai-app";
+import { LobbyApp } from "@/components/apps/lobby/lobby-app";
 import { SettingsApp } from "@/components/apps/settings/settings-app";
 import { ITermApp } from "@/components/apps/iterm/iterm-app";
 import { FinderApp } from "@/components/apps/finder/finder-app";
@@ -19,6 +19,7 @@ import { getPreviewMetadataFromPath } from "@/lib/preview-utils";
 import { IOSStatusBar } from "@/components/mobile/ios-status-bar";
 import { IOSHomeScreen } from "@/components/mobile/ios-home-screen";
 import { IOSHomeIndicator } from "@/components/mobile/ios-home-indicator";
+import { getAppById } from "@/lib/app-config";
 
 type AppTransition = "idle" | "opening" | "closing";
 
@@ -151,7 +152,7 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
     let detectedApp: string | null = null;
     if (path.startsWith("/settings")) detectedApp = "settings";
     else if (path.startsWith("/messages")) detectedApp = "messages";
-    else if (path.startsWith("/local-ai")) detectedApp = "local-ai";
+    else if (path.startsWith("/lobby")) detectedApp = "lobby";
     else if (path.startsWith("/notes")) detectedApp = "notes";
     else if (path.startsWith("/iterm")) detectedApp = "iterm";
     else if (path.startsWith("/finder")) detectedApp = "finder";
@@ -190,6 +191,12 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
   }, [initialApp]);
 
   const handleAppOpen = useCallback((appId: string) => {
+    const app = getAppById(appId);
+    if (app?.externalUrl) {
+      window.open(app.externalUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
     setRenderedApp(appId);
     setTransition("opening");
     requestAnimationFrame(() => {
@@ -530,8 +537,8 @@ export function MobileShell({ initialApp, initialNoteSlug }: MobileShellProps) {
               {renderedApp === "messages" && (
                 <MessagesApp isMobile={true} inShell={false} />
               )}
-              {renderedApp === "local-ai" && (
-                <LocalAiApp isMobile={true} inShell={false} />
+              {renderedApp === "lobby" && (
+                <LobbyApp isMobile={true} inShell={false} />
               )}
               {renderedApp === "settings" && (
                 <SettingsApp isMobile={true} inShell={false} />

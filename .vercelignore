@@ -1,4 +1,11 @@
 # Local agent/runtime state and model caches
+.next
+.next/**
+.next-corrupt-backup
+.next-corrupt-backup/**
+.next-icon-verify
+.next-icon-verify/**
+.codegraph
 .omx
 .omx/**
 .codex

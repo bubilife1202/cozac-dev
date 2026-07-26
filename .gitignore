@@ -16,6 +16,8 @@
 # next.js
 /.next/
 /out/
+/.next-corrupt-backup/
+/.next-icon-verify/
 
 # production
 /build
@@ -49,3 +51,5 @@ ARCHITECTURE.md
 SPEC.md
 prompts.db
 .omx/
+.omc/
+.codegraph/

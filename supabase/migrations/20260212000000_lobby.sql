@@ -68,23 +68,29 @@ CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at
 CREATE INDEX IF NOT EXISTS idx_messages_channel_created ON public.messages(channel_id, created_at);
 
 -- RLS: Profiles
+DROP POLICY IF EXISTS "profiles_public_read" ON public.profiles;
 CREATE POLICY "profiles_public_read" ON public.profiles
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
 CREATE POLICY "profiles_update_own" ON public.profiles
     FOR UPDATE USING (auth.uid() = id);
 
 -- RLS: Channels (anyone can read)
+DROP POLICY IF EXISTS "channels_public_read" ON public.channels;
 CREATE POLICY "channels_public_read" ON public.channels
     FOR SELECT USING (true);
 
 -- RLS: Messages
+DROP POLICY IF EXISTS "messages_public_read" ON public.messages;
 CREATE POLICY "messages_public_read" ON public.messages
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "messages_authenticated_insert" ON public.messages;
 CREATE POLICY "messages_authenticated_insert" ON public.messages
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "messages_delete_own" ON public.messages;
 CREATE POLICY "messages_delete_own" ON public.messages
     FOR DELETE USING (auth.uid() = user_id);
 
@@ -111,4 +117,16 @@ INSERT INTO public.channels (name, description, emoji) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 -- Enable realtime for messages
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
+          AND schemaname = 'public'
+          AND tablename = 'messages'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+    END IF;
+END;
+$$;

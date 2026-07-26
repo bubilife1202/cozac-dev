@@ -124,15 +124,39 @@ export function MessageBubble({
     );
   };
 
+  // Message content is injected as HTML below so recipient names can be styled
+  // inline. Everything that reaches this function is untrusted - the visitor's
+  // own typing, and whatever the model returns - so escape first and only then
+  // add our own markup.
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  // Turn the portfolio chat's source references into real links. Runs after
+  // escaping, so only paths matching this exact shape become anchors.
+  const linkifyNotePaths = (value: string) =>
+    value.replace(
+      /(^|[\s(])\/(notes\/[a-z0-9-]+)/gi,
+      (_match, prefix: string, path: string) =>
+        `${prefix}<a href="/${path}" class="underline underline-offset-2 hover:opacity-80">/${path}</a>`
+    );
+
   // Helper function to prepare message content by highlighting recipient names
   const prepareContent = (
     content: string,
     recipients: Conversation["recipients"],
     sender: string
   ) => {
-    if (!recipients) return content;
+    const safeContent = escapeHtml(content);
+    if (!recipients) {
+      return <span dangerouslySetInnerHTML={{ __html: linkifyNotePaths(safeContent) }} />;
+    }
 
-    let highlightedContent = content;
+    let highlightedContent = safeContent;
     recipients.forEach((recipient) => {
       // Special case for I. M. Pei - only highlight when seeing full initials or last name
       if (recipient.name === "I. M. Pei") {
@@ -192,7 +216,7 @@ export function MessageBubble({
         });
     });
 
-    return <span dangerouslySetInnerHTML={{ __html: highlightedContent }} />;
+    return <span dangerouslySetInnerHTML={{ __html: linkifyNotePaths(highlightedContent) }} />;
   };
 
   // Helper function to get reaction verb

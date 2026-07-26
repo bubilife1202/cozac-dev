@@ -92,7 +92,7 @@ export async function POST(req: Request) {
               action: "respond",
               participant: recipients[0].name,
               message:
-                "지금은 챗봇이 비활성화되어 있어요. 필요한 내용은 Notes나 Local Agent에서 먼저 확인해 주세요.",
+                "이 연락처의 AI 대화는 현재 비활성화되어 있어요. cozac 대화에서 포트폴리오 AI를 이용해 주세요.",
             },
           ],
         }),

@@ -1,5 +1,7 @@
 import { Conversation } from "@/types/messages";
 
+export const PORTFOLIO_CONVERSATION_ID = "cozac-portfolio-chat";
+
 function getTimeAgo(minutes: number) {
   const date = new Date();
   date.setMinutes(date.getMinutes() - minutes);
@@ -8,7 +10,7 @@ function getTimeAgo(minutes: number) {
 
 export const initialConversations: Conversation[] = [
   {
-    id: "cozac-portfolio-chat",
+    id: PORTFOLIO_CONVERSATION_ID,
     name: "cozac",
     recipients: [
       {

@@ -4,19 +4,26 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Nav } from "./nav";
 import { Conversation, Message, Reaction } from "@/types/messages";
 import { v4 as uuidv4 } from "uuid";
-import { initialConversations } from "@/data/messages/initial-conversations";
+import {
+  initialConversations,
+  PORTFOLIO_CONVERSATION_ID,
+} from "@/data/messages/initial-conversations";
 import { MessageQueue } from "@/lib/messages/message-queue";
 import { soundEffects, shouldMuteIncomingSound } from "@/lib/messages/sound-effects";
 import { extractMessageContent } from "@/lib/messages/content";
 import { useWindowFocus } from "@/lib/window-focus-context";
 import { useFileMenu } from "@/lib/file-menu-context";
 import { loadMessagesConversation, saveMessagesConversation } from "@/lib/sidebar-persistence";
+import { isLegacyPortfolioMessage } from "@/lib/local-ai/portfolio-knowledge";
 
 interface AppProps {
   isDesktop?: boolean;
   inShell?: boolean; // When true, prevent URL updates (for mobile shell)
   focusModeActive?: boolean; // When true, mute all notifications and sounds
 }
+
+const LEGACY_MODEL_CACHE_CLEANUP_KEY =
+  "cozac.hostedGemma.legacyCacheCleared.v1";
 
 function cloneConversations(conversations: Conversation[]): Conversation[] {
   return conversations.map((conv) => ({
@@ -74,6 +81,22 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
   useEffect(() => {
     focusModeRef.current = focusModeActive;
   }, [focusModeActive]);
+
+  useEffect(() => {
+    if (localStorage.getItem(LEGACY_MODEL_CACHE_CLEANUP_KEY) === "1") return;
+
+    void import("@/lib/local-ai/storage")
+      .then(({ clearLocalAiModelCaches }) => clearLocalAiModelCaches())
+      .then((result) => {
+        if (result.errors.length === 0) {
+          localStorage.setItem(LEGACY_MODEL_CACHE_CLEANUP_KEY, "1");
+        }
+      })
+      .catch(() => {
+        // Retry on a later visit if browser cache access is temporarily unavailable.
+      });
+  }, []);
+
   const STORAGE_KEY = "cozac.messages.conversations.v1";
   const DELETED_INITIAL_KEY = "cozac.messages.deletedInitialConversations.v1";
 
@@ -229,6 +252,7 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
         // Ignore parse errors
       }
     }
+    deletedInitialIds.delete(PORTFOLIO_CONVERSATION_ID);
 
     // Start with initial conversations, excluding deleted ones
     let allConversations = cloneConversations(initialConversations).filter(
@@ -254,10 +278,22 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
         const modifiedInitialConversations = new Map();
 
         for (const savedConv of parsedConversations) {
+          const migratedConversation =
+            savedConv.id === PORTFOLIO_CONVERSATION_ID && Array.isArray(savedConv.messages)
+              ? {
+                  ...savedConv,
+                  messages: savedConv.messages.filter(
+                    (message: Message) =>
+                      message.sender === "me" ||
+                      !isLegacyPortfolioMessage(message.content),
+                  ),
+                }
+              : savedConv;
+
           if (initialIds.has(savedConv.id)) {
-            modifiedInitialConversations.set(savedConv.id, savedConv);
+            modifiedInitialConversations.set(savedConv.id, migratedConversation);
           } else {
-            userConversations.push(savedConv);
+            userConversations.push(migratedConversation);
           }
         }
 
@@ -379,13 +415,18 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
           const currentActiveConversation =
             messageQueue.current.getActiveConversation();
 
+          // A streaming answer updates the same message many times. Only a new
+          // reaction counts as something the reader has not seen - counting
+          // content edits would run the badge up once per token.
+          const isNewActivity = updates.reactions !== undefined;
+
           // Note: hideAlerts and focusMode do NOT affect unread count - only sounds
           return prev.map((conv) =>
             conv.id === conversationId
               ? {
                   ...conv,
                   unreadCount:
-                    conversationId === currentActiveConversation
+                    !isNewActivity || conversationId === currentActiveConversation
                       ? conv.unreadCount
                       : (conv.unreadCount || 0) + 1,
                   messages: conv.messages.map((msg) => {
@@ -690,6 +731,8 @@ export default function App({ isDesktop = false, inShell = false, focusModeActiv
 
   // Method to handle conversation deletion
   const handleDeleteConversation = (id: string) => {
+    if (id === PORTFOLIO_CONVERSATION_ID) return;
+
     // Check if this is an initial conversation and track its deletion
     const initialIds = new Set(initialConversations.map((conv) => conv.id));
     if (initialIds.has(id)) {

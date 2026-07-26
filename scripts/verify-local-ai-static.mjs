@@ -1,119 +1,157 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const failures = [];
 const requiredFiles = [
-  "lib/local-ai/types.ts",
-  "lib/local-ai/security.ts",
-  "lib/local-ai/diagnostics.ts",
-  "lib/local-ai/diff.ts",
-  "lib/local-ai/agent-core.ts",
-  "lib/local-ai/file-system-adapter.ts",
-  "lib/local-ai/storage.ts",
-  "lib/local-ai/document-ingest.ts",
-  "lib/local-ai/chunking.ts",
-  "lib/local-ai/embeddings.ts",
-  "lib/local-ai/vector-store.ts",
-  "lib/local-ai/retrieval.ts",
-  "lib/local-ai/rag-agent-tool.ts",
-  "lib/local-ai/model-engine.ts",
-  "tests/local-ai/security.test.ts",
-  "tests/local-ai/diagnostics.test.ts",
-  "tests/local-ai/diff.test.ts",
-  "tests/local-ai/agent-core.test.ts",
-  "tests/local-ai/rag.test.ts",
-  "tests/local-ai/model-engine.test.ts",
+  "lib/local-ai/hosted-gemma.ts",
+  "lib/local-ai/hosted-portfolio-chat.ts",
+  "lib/local-ai/portfolio-knowledge.ts",
+  "lib/messages/message-queue.ts",
+  "app/api/portfolio-chat/route.ts",
+  "components/apps/messages/app.tsx",
+  "components/apps/messages/chat-area.tsx",
+  "app/(desktop)/local-ai/page.tsx",
+  "tests/local-ai/hosted-gemma.test.ts",
+  "tests/local-ai/messages-portfolio-integration.test.ts",
 ];
 
-for (const file of requiredFiles) {
-  if (!existsSync(join(root, file))) {
-    failures.push(`missing required Local Agent test/core file: ${file}`);
+function read(relativePath) {
+  const absolutePath = join(root, relativePath);
+  if (!existsSync(absolutePath)) {
+    failures.push(`missing required hosted portfolio AI file: ${relativePath}`);
+    return "";
+  }
+  return readFileSync(absolutePath, "utf8");
+}
+
+const sources = Object.fromEntries(
+  requiredFiles.map((relativePath) => [relativePath, read(relativePath)]),
+);
+const hostedGemma = sources["lib/local-ai/hosted-gemma.ts"];
+const hostedPortfolio = sources["lib/local-ai/hosted-portfolio-chat.ts"];
+const portfolioKnowledge = sources["lib/local-ai/portfolio-knowledge.ts"];
+const messageQueue = sources["lib/messages/message-queue.ts"];
+const portfolioRoute = sources["app/api/portfolio-chat/route.ts"];
+const messagesApp = sources["components/apps/messages/app.tsx"];
+const chatArea = sources["components/apps/messages/chat-area.tsx"];
+const redirectRoute = sources["app/(desktop)/local-ai/page.tsx"];
+
+if (existsSync(join(root, "components", "apps", "local-ai"))) {
+  failures.push("standalone components/apps/local-ai workbench must remain removed");
+}
+if (existsSync(join(root, "components", "apps", "messages", "portfolio-model-status.tsx"))) {
+  failures.push("Messages must not ask visitors to download the retired browser model");
+}
+
+for (const relativePath of [
+  "lib/app-config.ts",
+  "components/desktop/desktop.tsx",
+  "components/mobile/mobile-shell.tsx",
+]) {
+  const text = read(relativePath);
+  if (/LocalAiApp|id:\s*["']local-ai["']/.test(text)) {
+    failures.push(`${relativePath}: standalone Local Agent must not be exposed`);
   }
 }
 
-function walk(directory) {
-  if (!existsSync(directory)) {
-    return [];
-  }
-
-  return readdirSync(directory).flatMap((entry) => {
-    const path = join(directory, entry);
-    const stats = statSync(path);
-    if (stats.isDirectory()) {
-      return walk(path);
-    }
-    return [path];
-  });
+if (!/redirect\(["']\/messages\?id=cozac-portfolio-chat["']\)/.test(redirectRoute)) {
+  failures.push("legacy /local-ai route must redirect to the cozac Messages conversation");
 }
 
-const sourceFiles = [
-  ...walk(join(root, "lib", "local-ai")),
-  ...walk(join(root, "components", "apps", "local-ai")),
-].filter((path) => /\.(ts|tsx|js|jsx|mjs)$/.test(path));
+for (const token of [
+  "gemma-4-26b-a4b-it",
+  "generativelanguage.googleapis.com",
+  "x-goog-api-key",
+  "systemInstruction",
+]) {
+  if (!hostedGemma.includes(token)) {
+    failures.push(`hosted Gemma client is missing ${token}`);
+  }
+}
+if (/\?(?:key|api_key)=/i.test(hostedGemma)) {
+  failures.push("Gemma API key must be sent in a server header, not the request URL");
+}
 
-const localAiProofAndDocFiles = [
-  "scripts/prove-local-ai-model.mjs",
-  "scripts/prove-local-ai-e2b-model.mjs",
-  "tasks/local-ai-e2b-model-proof.md",
-  "tasks/local-ai-verification-checklist.md",
-]
-  .map((file) => join(root, file))
-  .filter((path) => existsSync(path));
+for (const token of [
+  "formatPortfolioGrounding",
+  "resolveGroundedPortfolioAnswer",
+  "shouldDeclineUngroundedPersonalQuestion",
+  "generateHostedGemma4",
+  "streamHostedGemma4",
+]) {
+  if (!hostedPortfolio.includes(token)) {
+    failures.push(`hosted portfolio service is missing ${token}`);
+  }
+}
+if (!/resolveGroundedPortfolioAnswer/.test(portfolioKnowledge)) {
+  failures.push("portfolio knowledge must validate weak or ungrounded model answers");
+}
 
-const combined = sourceFiles
-  .map((path) => ({ path: relative(root, path), text: readFileSync(path, "utf8") }));
+for (const token of [
+  "GEMINI_API_KEY",
+  "streamHostedPortfolioChat",
+  "consumeRateLimit",
+  "AbortSignal.timeout",
+]) {
+  if (!portfolioRoute.includes(token)) {
+    failures.push(`hosted portfolio route is missing ${token}`);
+  }
+}
+if (/NEXT_PUBLIC_[A-Z_]*(?:GEMINI|GOOGLE)/.test(`${portfolioRoute}\n${hostedGemma}`)) {
+  failures.push("Google Gemma credentials must never use a NEXT_PUBLIC environment variable");
+}
 
-const localAiProofAndDocs = localAiProofAndDocFiles
-  .map((path) => ({ path: relative(root, path), text: readFileSync(path, "utf8") }));
-
-for (const { path, text } of combined) {
-  if (/MessageQueue/.test(text)) {
-    failures.push(`${path}: Local Agent must not import or call MessageQueue`);
-  }
-  if (/\/api\/chat/.test(text)) {
-    failures.push(`${path}: Local Agent must not call /api/chat`);
-  }
-  if (/from ["']node:child_process["']|from ["']child_process["']|require\(["']child_process["']\)|\b(exec|spawn)\s*\(/i.test(text)) {
-    failures.push(`${path}: Local Agent v1 must not expose shell process execution paths`);
-  }
-  if (/https?:\/\/localhost|https?:\/\/127\.0\.0\.1/i.test(text)) {
-    failures.push(`${path}: Local Agent v1 must not use a localhost bridge`);
-  }
-  if (/\.cozac-agent/.test(text)) {
-    failures.push(`${path}: Local Agent v1 must not create or reference automatic .cozac-agent storage`);
-  }
-  if (/\bfetch\s*\(/.test(text)) {
-    failures.push(`${path}: fetch() requires manual review before Local Agent can prove no local content leaves the browser`);
-  }
-
-  const rawFsApi = /FileSystemDirectoryHandle|FileSystemFileHandle|showDirectoryPicker/.test(text);
-  if (rawFsApi && path !== "lib/local-ai/file-system-adapter.ts") {
-    failures.push(`${path}: raw File System Access API must stay isolated to lib/local-ai/file-system-adapter.ts`);
+const portfolioBranch = messageQueue.indexOf("isPortfolioRecipient(conversation.recipients[0])");
+const genericServerBranch = messageQueue.indexOf("this.fetchWithRetry(");
+if (
+  portfolioBranch < 0 ||
+  genericServerBranch < 0 ||
+  portfolioBranch > genericServerBranch
+) {
+  failures.push("cozac portfolio chat must branch before the generic server chat path");
+}
+if (!messageQueue.includes('fetch("/api/portfolio-chat"')) {
+  failures.push("Messages must send cozac conversation history to /api/portfolio-chat");
+}
+for (const retiredToken of [
+  "generateBrowserLocalAnswer",
+  "getBrowserLocalModelSnapshot",
+  "loadBrowserLocalModel",
+  "hasLocalAiModelCache",
+]) {
+  if (messageQueue.includes(retiredToken)) {
+    failures.push(`Messages must not depend on retired browser runtime ${retiredToken}`);
   }
 }
 
-for (const { path, text } of localAiProofAndDocs) {
-  if (/gemma-3|Gemma 3|270M|phone-270m/.test(text)) {
-    failures.push(`${path}: Local Agent proof/docs must reference current Gemma 4 or SmolLM2 135M paths, not stale Gemma 3/270M labels`);
-  }
+if (/PortfolioModelStatus|isPortfolioChat/.test(chatArea)) {
+  failures.push("Messages chat area must not render a browser model download card");
+}
+if (!/clearLocalAiModelCaches/.test(messagesApp)) {
+  failures.push("Messages must clear obsolete browser model caches once after migration");
 }
 
-const messagesFiles = walk(join(root, "components", "apps", "messages")).filter((path) => /\.(ts|tsx)$/.test(path));
-for (const file of messagesFiles) {
-  const text = readFileSync(file, "utf8");
-  if (/local-ai|Local Agent/i.test(text) && /MessageQueue|\/api\/chat/.test(text)) {
-    failures.push(`${relative(root, file)}: Messages Local Agent entry must not enter the existing send queue or /api/chat path`);
+for (const [relativePath, text] of [
+  ["lib/local-ai/hosted-gemma.ts", hostedGemma],
+  ["lib/local-ai/hosted-portfolio-chat.ts", hostedPortfolio],
+  ["app/api/portfolio-chat/route.ts", portfolioRoute],
+]) {
+  if (/from ["'](?:node:)?child_process["']|require\(["'](?:node:)?child_process["']\)|\b(?:exec|spawn)\s*\(/i.test(text)) {
+    failures.push(`${relativePath}: hosted portfolio AI must not expose shell execution`);
+  }
+  if (/https?:\/\/(?:localhost|127\.0\.0\.1)/i.test(text)) {
+    failures.push(`${relativePath}: hosted portfolio AI must not use a localhost bridge`);
   }
 }
 
 if (failures.length > 0) {
-  console.error("Local Agent static verification failed:");
-  for (const failure of failures) {
-    console.error(`- ${failure}`);
-  }
+  console.error("Messages hosted portfolio AI static verification failed:");
+  for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log(`Local Agent static verification passed (${requiredFiles.length} required files, ${combined.length} source files, ${localAiProofAndDocs.length} proof/doc files scanned).`);
+console.log(
+  `Messages hosted portfolio AI static verification passed (${requiredFiles.length} required files, Google Gemma 4 server route, no visitor model download).`,
+);

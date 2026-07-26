@@ -26,7 +26,11 @@ writeFileSync(
         rootDir: root,
         outDir,
       },
-      include: ["../../../lib/local-ai/**/*.ts", "../../../tests/local-ai/**/*.ts"],
+      include: [
+        "../../../lib/local-ai/**/*.ts",
+        "../../../lib/rate-limit.ts",
+        "../../../tests/local-ai/**/*.ts",
+      ],
     },
     null,
     2,

@@ -95,7 +95,6 @@ export function ChatArea({
   }, [windowFocus?.isFocused, activeConversation, isMobileView]);
 
   const conversationRecipients = activeConversation?.recipients || [];
-
   // Create a key that changes when recipients change
   const messageInputKey = conversationRecipients.map((r) => r.id).join(",");
 

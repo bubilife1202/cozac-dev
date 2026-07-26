@@ -1,6 +1,50 @@
 import { Conversation, Message, ReactionType } from "@/types/messages";
 import { soundEffects } from "./sound-effects";
 
+function isPortfolioRecipient(recipient: { name?: string } | undefined): boolean {
+  return recipient?.name?.trim().toLowerCase() === "cozac";
+}
+
+type PortfolioChatStreamEvent = {
+  type?: string;
+  text?: unknown;
+  sources?: unknown;
+};
+
+/** Read a newline-delimited JSON body, yielding each complete line. */
+async function* readNdjsonStream(
+  response: Response,
+): AsyncGenerator<PortfolioChatStreamEvent, void, undefined> {
+  const body = response.body;
+  if (!body) return;
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let newlineIndex: number;
+      while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        if (!line) continue;
+        try {
+          yield JSON.parse(line) as PortfolioChatStreamEvent;
+        } catch {
+          // A truncated line means the stream was cut; there is nothing to read.
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 type ConversationState = {
   status: "idle" | "processing";
   version: number;
@@ -234,6 +278,11 @@ export class MessageQueue {
     try {
       const isGroupChat = conversation.recipients.length > 1;
 
+      if (!isGroupChat && isPortfolioRecipient(conversation.recipients[0])) {
+        await this.processPortfolioMessage(conversationId, conversation, state, currentVersion);
+        return;
+      }
+
       const response = await this.fetchWithRetry(
         conversation,
         !isGroupChat,
@@ -387,6 +436,115 @@ export class MessageQueue {
     } finally {
       state.status = "idle";
       state.currentAbortController = null;
+    }
+  }
+
+  private async processPortfolioMessage(
+    conversationId: string,
+    conversation: Conversation,
+    state: ConversationState,
+    currentVersion: number
+  ) {
+    const sender = conversation.recipients[0]?.name || "cozac";
+    this.callbacks.onTypingStatusChange(conversationId, sender);
+
+    try {
+      const messages = conversation.messages
+        .filter((m) => m.sender !== "system" && typeof m.content === "string")
+        .slice(-12)
+        .map((message) => ({
+          role: message.sender === "me" ? "user" : "assistant",
+          content: message.content,
+        }));
+      const response = await fetch("/api/portfolio-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages }),
+        signal: state.currentAbortController?.signal,
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string };
+        const error = new Error(data.error || `Portfolio chat failed: ${response.status}`);
+        (error as Error & { status?: number }).status = response.status;
+        throw error;
+      }
+
+      if (currentVersion !== state.version) {
+        this.callbacks.onTypingStatusChange(null, null);
+        return;
+      }
+
+      const messageId = crypto.randomUUID();
+      let answer = "";
+      let sourceUrls: string[] = [];
+      let emitted = false;
+
+      const publish = () => {
+        // Hold the typing indicator until there is something to show, then swap
+        // it for the bubble the rest of the answer fills in.
+        if (!emitted) {
+          emitted = true;
+          this.callbacks.onTypingStatusChange(null, null);
+          this.callbacks.onMessageGenerated(conversationId, {
+            id: messageId,
+            content: answer,
+            sender,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+        this.callbacks.onMessageUpdated?.(conversationId, messageId, { content: answer });
+      };
+
+      for await (const event of readNdjsonStream(response)) {
+        if (currentVersion !== state.version) {
+          this.callbacks.onTypingStatusChange(null, null);
+          return;
+        }
+
+        if (event.type === "delta" && typeof event.text === "string") {
+          answer += event.text;
+          publish();
+        } else if (event.type === "replace" && typeof event.text === "string") {
+          answer = event.text;
+          publish();
+        } else if (event.type === "done") {
+          sourceUrls = Array.isArray(event.sources)
+            ? Array.from(new Set(event.sources.filter(
+                (source): source is string =>
+                  typeof source === "string" && source.startsWith("/notes/"),
+              )))
+            : [];
+        }
+      }
+
+      if (!answer.trim()) {
+        answer = "Gemma 4가 빈 응답을 만들었어요. 다시 물어봐 주세요.";
+      }
+      if (sourceUrls.length > 0) {
+        answer = `${answer.trim()}\n\n참고: ${sourceUrls.join(" · ")}`;
+      }
+      publish();
+
+      this.callbacks.onTypingStatusChange(null, null);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      console.error("Hosted portfolio chat failed:", error);
+      if (currentVersion === state.version) {
+        const status = (error as Error & { status?: number }).status;
+        const reason = status === 429
+          ? "지금은 무료 Gemma 4 사용량이 몰렸어요. 잠시 후 다시 물어봐 주세요."
+          : "Gemma 4 응답 연결에 실패했어요. 잠시 후 다시 물어봐 주세요.";
+        const errorMessage: Message = {
+          id: crypto.randomUUID(),
+          content: reason,
+          sender,
+          timestamp: new Date().toISOString(),
+        };
+        this.callbacks.onMessageGenerated(conversationId, errorMessage);
+      }
+      this.callbacks.onTypingStatusChange(null, null);
     }
   }
 

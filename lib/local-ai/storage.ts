@@ -1,48 +1,10 @@
-import type { LocalAiStoreName } from "./types";
+// Cleanup for the retired browser-local model runtime.
+//
+// Visitors who used the site before the hosted Gemma migration still carry a
+// multi-hundred-megabyte model in Cache Storage and an IndexedDB database that
+// nothing writes to anymore. Messages clears both once per browser on load.
 
 export const LOCAL_AI_DB_NAME = "cozac-local-ai";
-export const LOCAL_AI_DB_VERSION = 1;
-
-export const LOCAL_AI_STORE_NAMES = [
-  "workspaces",
-  "sessions",
-  "toolEvents",
-  "diffs",
-  "approvals",
-  "diagnostics",
-  "documents",
-  "chunks",
-  "embeddings",
-  "vectorIndexes",
-  "retrievalEvents",
-] as const satisfies readonly LocalAiStoreName[];
-
-export function assertIndexedDbAvailable(): boolean {
-  return typeof indexedDB !== "undefined";
-}
-
-export function openLocalAiDatabase(): Promise<IDBDatabase> {
-  if (!assertIndexedDbAvailable()) {
-    return Promise.reject(new Error("IndexedDB is unavailable; Local Agent state must remain browser-local."));
-  }
-
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(LOCAL_AI_DB_NAME, LOCAL_AI_DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      for (const storeName of LOCAL_AI_STORE_NAMES) {
-        if (!database.objectStoreNames.contains(storeName)) {
-          database.createObjectStore(storeName, { keyPath: "id" });
-        }
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("Failed to open Local Agent IndexedDB database."));
-  });
-}
-
 
 export const LOCAL_AI_MODEL_CACHE_PATTERNS = [
   /transformers/i,
@@ -58,8 +20,30 @@ export type LocalAiStorageCleanupResult = {
   errors: string[];
 };
 
+export type LocalAiModelCacheCleanupResult = Pick<LocalAiStorageCleanupResult, "deletedCaches" | "errors">;
+
+export type LocalAiModelCacheStorage = {
+  keys(): Promise<string[]>;
+  delete(cacheName: string): Promise<boolean>;
+};
+
+export function assertIndexedDbAvailable(): boolean {
+  return typeof indexedDB !== "undefined";
+}
+
 export function getLocalAiCacheDeletionPlan(cacheNames: readonly string[]): string[] {
   return cacheNames.filter((cacheName) => LOCAL_AI_MODEL_CACHE_PATTERNS.some((pattern) => pattern.test(cacheName)));
+}
+
+export async function hasLocalAiModelCache(): Promise<boolean> {
+  const cacheStorage = typeof caches !== "undefined" ? caches : undefined;
+  if (!cacheStorage) return false;
+  try {
+    const cacheNames = await cacheStorage.keys();
+    return getLocalAiCacheDeletionPlan(cacheNames).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 export function deleteLocalAiDatabase(): Promise<boolean> {
@@ -73,18 +57,12 @@ export function deleteLocalAiDatabase(): Promise<boolean> {
   });
 }
 
-export async function clearLocalAiBrowserStorage(): Promise<LocalAiStorageCleanupResult> {
+export async function clearLocalAiModelCaches(
+  cacheStorage: LocalAiModelCacheStorage | undefined = typeof caches !== "undefined" ? caches : undefined,
+): Promise<LocalAiModelCacheCleanupResult> {
   const errors: string[] = [];
   const deletedCaches: string[] = [];
-  let deletedDatabase = false;
 
-  try {
-    deletedDatabase = await deleteLocalAiDatabase();
-  } catch (error) {
-    errors.push(error instanceof Error ? error.message : "Failed to delete Local Agent IndexedDB database.");
-  }
-
-  const cacheStorage = typeof caches !== "undefined" ? caches : undefined;
   if (cacheStorage) {
     try {
       const cacheNames = await cacheStorage.keys();
@@ -98,24 +76,21 @@ export async function clearLocalAiBrowserStorage(): Promise<LocalAiStorageCleanu
     }
   }
 
-  return { deletedDatabase, deletedCaches, errors };
+  return { deletedCaches, errors };
 }
 
-export function putLocalAiRecord(storeName: LocalAiStoreName, record: Record<string, unknown> & { id: string }): Promise<void> {
-  return openLocalAiDatabase().then(
-    (database) =>
-      new Promise<void>((resolve, reject) => {
-        const transaction = database.transaction(storeName, "readwrite");
-        transaction.objectStore(storeName).put(record);
-        transaction.oncomplete = () => {
-          database.close();
-          resolve();
-        };
-        transaction.onerror = () => {
-          const error = transaction.error ?? new Error(`Failed to write ${storeName} record.`);
-          database.close();
-          reject(error);
-        };
-      }),
-  );
+export async function clearLocalAiBrowserStorage(): Promise<LocalAiStorageCleanupResult> {
+  const errors: string[] = [];
+  let deletedDatabase = false;
+
+  try {
+    deletedDatabase = await deleteLocalAiDatabase();
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : "Failed to delete Local Agent IndexedDB database.");
+  }
+
+  const cacheCleanup = await clearLocalAiModelCaches();
+  errors.push(...cacheCleanup.errors);
+
+  return { deletedDatabase, deletedCaches: cacheCleanup.deletedCaches, errors };
 }
